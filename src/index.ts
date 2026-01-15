@@ -1,6 +1,10 @@
 #!/usr/bin/env node
 
 import { config } from 'dotenv';
+import path from 'path';
+// 先加载环境变量，确保所有模块都能访问到
+config({ path: path.resolve(__dirname, '../.env') });
+
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import {
@@ -10,7 +14,6 @@ import {
   ErrorCode
 } from "@modelcontextprotocol/sdk/types.js";
 import { ADTClient, session_types } from "abap-adt-api";
-import path from 'path';
 import { AuthHandlers } from './handlers/AuthHandlers.js';
 import { TransportHandlers } from './handlers/TransportHandlers.js';
 import { ObjectHandlers } from './handlers/ObjectHandlers.js';
@@ -36,8 +39,6 @@ import { AtcHandlers } from './handlers/AtcHandlers.js';
 import { TraceHandlers } from './handlers/TraceHandlers.js';
 import { RefactorHandlers } from './handlers/RefactorHandlers.js';
 import { RevisionHandlers } from './handlers/RevisionHandlers.js';
-
-config({ path: path.resolve(__dirname, '../.env') });
 
 export class AbapAdtServer extends Server {
   private adtClient: ADTClient;
@@ -89,10 +90,24 @@ export class AbapAdtServer extends Server {
       process.env.SAP_URL as string,
       process.env.SAP_USER as string,
       process.env.SAP_PASSWORD as string,
-      process.env.SAP_CLIENT as string,
-      process.env.SAP_LANGUAGE as string
+      process.env.SAP_CLIENT || undefined,
+      process.env.SAP_LANGUAGE || undefined
     );
-    this.adtClient.stateful = session_types.stateful
+    // 默认使用stateless模式以提高兼容性，特别是对ECC系统
+    // 可以通过环境变量SAP_SESSION_TYPE覆盖
+    this.adtClient.stateful = process.env.SAP_SESSION_TYPE === 'stateful' ? session_types.stateful : session_types.stateless;
+    
+    // 为ADT客户端添加详细的调试日志
+    console.debug(JSON.stringify({
+      message: 'ADT Client initialized with',
+      data: {
+        url: process.env.SAP_URL,
+        user: process.env.SAP_USER,
+        client: process.env.SAP_CLIENT,
+        language: process.env.SAP_LANGUAGE,
+        stateful: this.adtClient.stateful
+      }
+    }));
     
     // Initialize handlers
     this.authHandlers = new AuthHandlers(this.adtClient);
@@ -145,28 +160,64 @@ export class AbapAdtServer extends Server {
   }
 
   private handleError(error: unknown) {
-    if (!(error instanceof Error)) {
-      error = new Error(String(error));
+    let errorObj: Error;
+    
+    if (error instanceof Error) {
+      errorObj = error;
+    } else {
+      errorObj = new Error(String(error));
     }
+    
+    // 使用类型断言安全地访问可能存在的额外属性
+    const typedError = errorObj as Error & { response?: { data?: any }, originalError?: any };
+    
+    console.error(JSON.stringify({
+      message: 'Detailed error information',
+      error: {
+        message: typedError.message,
+        stack: typedError.stack,
+        name: typedError.name,
+        // 添加可能存在的额外错误属性
+        ...typedError.response?.data && { response: typedError.response.data },
+        ...typedError.originalError && { originalError: typedError.originalError }
+      }
+    }));
+    
     if (error instanceof McpError) {
       return {
         content: [{
           type: 'text',
           text: JSON.stringify({
             error: error.message,
-            code: error.code
+            code: error.code,
+            details: error
           })
         }],
         isError: true
       };
     }
+    
+    // 尝试提取更详细的错误信息
+    const errorDetails: Record<string, any> = {
+      error: typedError.message || 'Internal server error',
+      code: ErrorCode.InternalError,
+      stack: typedError.stack,
+      name: typedError.name
+    };
+    
+    // 添加SAP ADT API可能返回的额外错误信息
+    if (typedError.response?.data) {
+      errorDetails['sapResponse'] = typedError.response.data;
+    }
+    
+    if (typedError.originalError) {
+      errorDetails['originalError'] = typedError.originalError;
+    }
+    
     return {
       content: [{
         type: 'text',
-        text: JSON.stringify({
-          error: 'Internal server error',
-          code: ErrorCode.InternalError
-        })
+        text: JSON.stringify(errorDetails)
       }],
       isError: true
     };
@@ -411,7 +462,7 @@ export class AbapAdtServer extends Server {
   async run() {
     const transport = new StdioServerTransport();
     await this.connect(transport);
-    console.error('MCP ABAP ADT API server running on stdio');
+    console.error(JSON.stringify({ message: 'MCP ABAP ADT API server running on stdio' }));
     
     // Handle shutdown
     process.on('SIGINT', async () => {
@@ -426,7 +477,7 @@ export class AbapAdtServer extends Server {
     
     // Handle errors
     this.onerror = (error) => {
-      console.error('[MCP Error]', error);
+      console.error(JSON.stringify({ message: '[MCP Error]', error: error }));
     };
   }
 }
@@ -434,6 +485,6 @@ export class AbapAdtServer extends Server {
 // Create and run server instance
 const server = new AbapAdtServer();
 server.run().catch((error) => {
-  console.error('Failed to start MCP server:', error);
+  console.error(JSON.stringify({ message: 'Failed to start MCP server', error: error }));
   process.exit(1);
 });

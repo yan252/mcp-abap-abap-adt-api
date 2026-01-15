@@ -253,7 +253,28 @@ export class CodeAnalysisHandlers extends BaseHandler {
     async handleSyntaxCheckCode(args: any): Promise<any> {
         const startTime = performance.now();
         try {
-            const result = await this.adtclient.syntaxCheck(args.url, args?.mainUrl, args?.code, args?.mainProgram, args?.version);
+            if (!args?.code) {
+                throw new McpError(ErrorCode.InvalidParams, 'Code parameter is required');
+            }
+            
+            // 如果url参数为空，使用默认值/sap/bc/adt/programs/programs/ztest
+            let url = args.url || '/sap/bc/adt/programs/programs/ztest';
+            let mainUrl = args?.mainUrl;
+            
+            // 如果只提供了url而没有提供mainUrl，尝试从url中推导mainUrl
+            if (url && !mainUrl) {
+                // 对于程序源文件URL格式：/sap/bc/adt/programs/programs/ztest22/source/main
+                // 推导出mainUrl为：/sap/bc/adt/programs/programs/ztest22
+                const sourcePattern = /\/source\/[^/]+$/;
+                if (sourcePattern.test(url)) {
+                    mainUrl = url.replace(sourcePattern, '');
+                } else {
+                    // 如果无法推导，使用url本身作为mainUrl
+                    mainUrl = url;
+                }
+            }
+            
+            const result = await this.adtclient.syntaxCheck(url, mainUrl, args.code, args?.mainProgram, args?.version);
             this.trackRequest(startTime, true);
             return {
                 content: [

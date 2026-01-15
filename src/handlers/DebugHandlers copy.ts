@@ -26,7 +26,7 @@ export class DebugHandlers extends BaseHandler {
                         },
                         user: {
                             type: 'string',
-                            description: 'The login user or the user configured for SAP connection.'
+                            description: 'The user.'
                         },
                         checkConflict: {
                             type: 'boolean',
@@ -57,7 +57,7 @@ export class DebugHandlers extends BaseHandler {
                         },
                         user: {
                             type: 'string',
-                            description: 'The login user or the user configured for SAP connection.'
+                            description: 'The user.'
                         },
                         checkConflict: {
                             type: 'boolean',
@@ -93,7 +93,7 @@ export class DebugHandlers extends BaseHandler {
                         },
                         user: {
                             type: 'string',
-                            description: 'The login user or the user configured for SAP connection.'
+                            description: 'The user.'
                         }
                     },
                     required: ['debuggingMode', 'terminalId', 'ideId', 'user']
@@ -127,7 +127,7 @@ export class DebugHandlers extends BaseHandler {
                         },
                         user: {
                             type: 'string',
-                            description: 'The login user or the user configured for SAP connection.'
+                            description: 'The user.'
                         },
                         scope: {
                             type: 'string',
@@ -144,7 +144,7 @@ export class DebugHandlers extends BaseHandler {
                             description: 'Whether to deactivate the breakpoints.',
                             optional: true
                         },
-                        syncScopeUrl: {
+                        syncScupeUrl: {
                             type: 'string',
                             description: 'The URL for scope synchronization.',
                             optional: true
@@ -177,7 +177,7 @@ export class DebugHandlers extends BaseHandler {
                         },
                         requestUser: {
                             type: 'string',
-                            description: 'The login user or the user configured for SAP connection.'
+                            description: 'The requesting user.'
                         },
                         scope: {
                             type: 'string',
@@ -204,7 +204,7 @@ export class DebugHandlers extends BaseHandler {
                         },
                         user: {
                             type: 'string',
-                            description: 'The login user or the user configured for SAP connection.'
+                            description: 'The user.'
                         },
                         dynproDebugging: {
                             type: 'boolean',
@@ -361,13 +361,11 @@ export class DebugHandlers extends BaseHandler {
     async handleDebuggerListeners(args: any): Promise<any> {
         const startTime = performance.now();
         try {
-            // 总是使用当前登录用户
-            const user = process.env.SAP_USER!;
             const result = await this.adtclient.debuggerListeners(
                 args.debuggingMode,
                 args.terminalId,
                 args.ideId,
-                user,
+                args.user,
                 args.checkConflict
             );
             this.trackRequest(startTime, true);
@@ -394,13 +392,11 @@ export class DebugHandlers extends BaseHandler {
     async handleDebuggerListen(args: any): Promise<any> {
         const startTime = performance.now();
         try {
-            // 总是使用当前登录用户
-            const user = process.env.SAP_USER!;
             const result = await this.adtclient.debuggerListen(
                 args.debuggingMode,
                 args.terminalId,
                 args.ideId,
-                user,
+                args.user,
                 args.checkConflict,
                 args.isNotifiedOnConflict
             );
@@ -428,13 +424,11 @@ export class DebugHandlers extends BaseHandler {
     async handleDebuggerDeleteListener(args: any): Promise<any> {
         const startTime = performance.now();
         try {
-            // 总是使用当前登录用户
-            const user = process.env.SAP_USER!;
             const result = await this.adtclient.debuggerDeleteListener(
                 args.debuggingMode,
                 args.terminalId,
                 args.ideId,
-                user
+                args.user
             );
             this.trackRequest(startTime, true);
             return {
@@ -460,101 +454,17 @@ export class DebugHandlers extends BaseHandler {
     async handleDebuggerSetBreakpoints(args: any): Promise<any> {
         const startTime = performance.now();
         try {
-            // 验证debuggingMode是否有效
-            if (args.debuggingMode && !['user', 'terminal'].includes(args.debuggingMode)) {
-                // 如果debuggingMode无效，默认使用'terminal'
-                args.debuggingMode = 'terminal';
-            }
-            
-            // 验证并转换断点数据，确保每个断点都有正确的结构
-            const formattedBreakpoints = args.breakpoints.map((bp: any) => {
-                // 如果断点已经是字符串格式，直接返回
-                if (typeof bp === 'string') {
-                    return bp;
-                }
-                
-                // 确保断点有 uri 或 url 属性，优先使用 uri
-                if (!bp.uri && !bp.url) {
-                    throw new McpError(
-                        ErrorCode.InvalidParams,
-                        'Breakpoint must have a uri or url property'
-                    );
-                }
-                
-                // 如果有 url 属性但没有 uri 属性，将 url 赋值给 uri
-                if (!bp.uri && bp.url) {
-                    bp.uri = bp.url;
-                }
-                
-                // 获取行号和列号，默认值为0
-                const line = bp.line || 0;
-                const column = bp.column || 0;
-                
-                // 对于abapstatements类型的断点，需要特殊处理
-                if (bp.type === 'abapstatements') {
-                    // 确保uri是字符串格式
-                    const uriString = typeof bp.uri === 'string' ? bp.uri : bp.uri.uri;
-                    // 生成唯一的ID
-                    const id = `${uriString}-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-                    return {
-                        ...bp,
-                        kind: 'abapstatements',
-                        clientId: args.clientId,
-                        id,
-                        nonAbapFlavour: '',
-                        name: bp.statement.substring(0, 20) + (bp.statement.length > 20 ? '...' : ''),
-                        condition: bp.condition, // 添加条件支持
-                        uri: {
-                            uri: uriString,
-                            query: undefined,
-                            range: {
-                                start: { line, column },
-                                end: { line, column }
-                            },
-                            hashparms: undefined
-                        }
-                    };
-                }
-                
-                // 确保 uri 属性有正确的结构
-                const uri = bp.uri;
-                const uriString = typeof uri === 'string' ? uri : uri.uri;
-                
-                // 对于普通的行号断点，确保它们符合DebugBreakpoint接口
-                return {
-                    ...bp,
-                    kind: 'line', // 设置断点类型为行断点
-                    clientId: args.clientId, // 添加clientId
-                    id: `${uriString}-${line}-${column}`, // 生成唯一ID
-                    nonAbapFlavour: '', // 添加nonAbapFlavour
-                    type: bp.type || 'line', // 设置类型，默认为line
-                    name: `${uriString}:${line}:${column}`, // 设置名称
-                    condition: bp.condition, // 添加条件支持
-                    uri: {
-                        uri: uriString,
-                        query: undefined,
-                        range: {
-                            start: { line, column },
-                            end: { line, column }
-                        },
-                        hashparms: undefined
-                    }
-                };
-            });
-            
-            // 总是使用当前登录用户
-            const user = process.env.SAP_USER!;
             const result = await this.adtclient.debuggerSetBreakpoints(
                 args.debuggingMode,
                 args.terminalId,
                 args.ideId,
                 args.clientId,
-                formattedBreakpoints,
-                user,
+                args.breakpoints,
+                args.user,
                 args.scope,
                 args.systemDebugging,
                 args.deactivated,
-                args.syncScopeUrl
+                args.syncScupeUrl
             );
             this.trackRequest(startTime, true);
             return {
@@ -580,14 +490,12 @@ export class DebugHandlers extends BaseHandler {
     async handleDebuggerDeleteBreakpoints(args: any): Promise<any> {
         const startTime = performance.now();
         try {
-            // 总是使用当前登录用户
-            const requestUser = process.env.SAP_USER!;
             const result = await this.adtclient.debuggerDeleteBreakpoints(
                 args.breakpoint,
                 args.debuggingMode,
                 args.terminalId,
                 args.ideId,
-                requestUser,
+                args.requestUser,
                 args.scope
             );
             this.trackRequest(startTime, true);
@@ -614,12 +522,10 @@ export class DebugHandlers extends BaseHandler {
     async handleDebuggerAttach(args: any): Promise<any> {
         const startTime = performance.now();
         try {
-            // 总是使用当前登录用户
-            const user = process.env.SAP_USER!;
             const result = await this.adtclient.debuggerAttach(
                 args.debuggingMode,
                 args.debuggeeId,
-                user,
+                args.user,
                 args.dynproDebugging
             );
             this.trackRequest(startTime, true);
