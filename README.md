@@ -4,11 +4,12 @@ DISCLAIMER: This server is still in experimental status! Use it with caution!
 
 [![smithery badge](https://smithery.ai/badge/@mario-andreschak/mcp-abap-abap-adt-api)](https://smithery.ai/server/@mario-andreschak/mcp-abap-abap-adt-api)
 ## 更新说明
-- **发现原项目https://github.com/mario-andreschak/mcp-abap-abap-adt-api.git在VSCODE中的Cline中使用时分报很多代码错误，应该是JSON在解析时错误，现已修改；
-- **工具syntaxCheckCode在只给代码时不能使用，优化后，只直接检查代码有效性；
-- **原代码在使用时连接方式使用了SESSION_TYPE 固定值为stateful，使此连接只能在S4中正常使用，而ECC不能正常连接使用，现在配置中增加SAP_SESSION_TYPE配置项目，可按ECC,或者S4设置不同的类型；
-- **为了调试方便，配置中也增加了调试及日志参数
-- 20260120 修正了在SAP地址为HTTPS时，没有SSL证书时，不能连接报证书问题错误。
+- **20260103 yangsen 修正
+1. **发现原项目https://github.com/mario-andreschak/mcp-abap-abap-adt-api.git在VSCODE中的Cline中使用时分报很多代码错误，应该是JSON在解析时错误，现已修改；
+2. **工具syntaxCheckCode在只给代码时不能使用，优化后，只直接检查代码有效性；
+3. **原代码在使用时连接方式使用了SESSION_TYPE 固定值为stateful，使此连接只能在S4中正常使用，而ECC不能正常连接使用，现在配置中增加SAP_SESSION_TYPE配置项目，可按ECC,或者S4设置不同的类型；
+4. **为了调试方便，配置中也增加了调试及日志参数
+5. **20260120 修正了在SAP地址为HTTPS时，没有SSL证书时（域名为IP时，原默认设置NODE_TLS_REJECT_UNAUTHORIZED=0确认不能解决登陆问题，此修改后正常），不能连接报证书问题错误。
 ## Description
 
 The MCP-Server `mcp-abap-abap-adt-api` is a Model Context Protocol (MCP) server designed to facilitate seamless communication between ABAP systems and MCP clients. It is a wrapper for [abap-adt-api](https://github.com/marcellourbani/abap-adt-api/) and provides a suite of tools and resources for managing ABAP objects, handling transport requests, performing code analysis, and more, enhancing the efficiency and effectiveness of ABAP development workflows.
