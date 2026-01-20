@@ -18,11 +18,15 @@ class AbapAdtServerTST {
       throw new Error(`Missing required environment variables: ${missingVars.join(', ')}`);
     }
     
-    console.log('Creating ADTClient with parameters:');
-    console.log('- URL:', process.env.SAP_URL);
-    console.log('- User:', process.env.SAP_USER);
-    console.log('- Client:', process.env.SAP_CLIENT);
-    console.log('- Language:', process.env.SAP_LANGUAGE);
+    console.log(JSON.stringify({
+      message: 'Creating ADTClient with parameters',
+      params: {
+        url: process.env.SAP_URL,
+        user: process.env.SAP_USER,
+        client: process.env.SAP_CLIENT,
+        language: process.env.SAP_LANGUAGE
+      }
+    }));
     
     this.adtClient = new ADTClient(
       process.env.SAP_URL as string,
@@ -55,10 +59,16 @@ class AbapAdtServerTST {
 
 const server = new AbapAdtServerTST();
 server.searchObject("YZZH","PROG").then((res) => {
-  console.log(res)
+  console.log(JSON.stringify({
+    message: 'Search result',
+    result: res
+  }));
 })
 .catch((err) => {
-  console.error('Search failed:', err);
+  console.error(JSON.stringify({
+    message: 'Search failed',
+    error: err
+  }));
 })
 // console.log(server.searchObject("YZZH","PROG"))
 // server.testLogin()

@@ -68,8 +68,14 @@ function log(level: LogLevel, name: string, message: string, meta?: Record<strin
     fs.appendFileSync(logFilePath, logString);
   } catch (error) {
     // 如果文件写入失败，降级到控制台输出
-    console.error('[Log Error] Failed to write to log file:', error);
-    console.error(logString);
+    console.error(JSON.stringify({
+      message: 'Log Error: Failed to write to log file',
+      error: error
+    }));
+    console.error(JSON.stringify({
+      message: 'Failed log entry',
+      logString: logString
+    }));
   }
 }
 

@@ -5,6 +5,9 @@ import path from 'path';
 // 先加载环境变量，确保所有模块都能访问到
 config({ path: path.resolve(__dirname, '../.env') });
 
+// 忽略证书验证
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import {
@@ -14,6 +17,8 @@ import {
   ErrorCode
 } from "@modelcontextprotocol/sdk/types.js";
 import { ADTClient, session_types } from "abap-adt-api";
+import { CustomHttpClient } from './CustomHttpClient.js';
+import https from "https";
 import { AuthHandlers } from './handlers/AuthHandlers.js';
 import { TransportHandlers } from './handlers/TransportHandlers.js';
 import { ObjectHandlers } from './handlers/ObjectHandlers.js';
@@ -86,28 +91,41 @@ export class AbapAdtServer extends Server {
       throw new Error(`Missing required environment variables: ${missingVars.join(', ')}`);
     }
     
+    // 创建HTTPS代理，禁用证书验证
+    const httpsAgent = new https.Agent({
+      keepAlive: true,
+      rejectUnauthorized: false
+    });
+    
+    // 创建自定义HTTP客户端实例
+    const customHttpClient = new CustomHttpClient(process.env.SAP_URL as string);
+    
+    // 创建ADT客户端实例，使用自定义HTTP客户端
     this.adtClient = new ADTClient(
-      process.env.SAP_URL as string,
+      customHttpClient,
       process.env.SAP_USER as string,
       process.env.SAP_PASSWORD as string,
       process.env.SAP_CLIENT || undefined,
-      process.env.SAP_LANGUAGE || undefined
+      process.env.SAP_LANGUAGE || undefined,
+      {
+        httpsAgent
+      }
     );
     // 默认使用stateless模式以提高兼容性，特别是对ECC系统
     // 可以通过环境变量SAP_SESSION_TYPE覆盖
     this.adtClient.stateful = process.env.SAP_SESSION_TYPE === 'stateful' ? session_types.stateful : session_types.stateless;
     
-    // 为ADT客户端添加详细的调试日志
-    console.debug(JSON.stringify({
-      message: 'ADT Client initialized with',
-      data: {
-        url: process.env.SAP_URL,
-        user: process.env.SAP_USER,
-        client: process.env.SAP_CLIENT,
-        language: process.env.SAP_LANGUAGE,
-        stateful: this.adtClient.stateful
-      }
-    }));
+    // 禁用调试日志，避免与MCP JSON-RPC格式冲突
+    // console.debug(JSON.stringify({
+    //   message: 'ADT Client initialized with',
+    //   data: {
+    //     url: process.env.SAP_URL,
+    //     user: process.env.SAP_USER,
+    //     client: process.env.SAP_CLIENT,
+    //     language: process.env.SAP_LANGUAGE,
+    //     stateful: this.adtClient.stateful
+    //   }
+    // }));
     
     // Initialize handlers
     this.authHandlers = new AuthHandlers(this.adtClient);
@@ -462,7 +480,8 @@ export class AbapAdtServer extends Server {
   async run() {
     const transport = new StdioServerTransport();
     await this.connect(transport);
-    console.error(JSON.stringify({ message: 'MCP ABAP ADT API server running on stdio' }));
+    // 禁用服务器启动日志，避免与MCP JSON-RPC格式冲突
+    // console.error(JSON.stringify({ message: 'MCP ABAP ADT API server running on stdio' }));
     
     // Handle shutdown
     process.on('SIGINT', async () => {
