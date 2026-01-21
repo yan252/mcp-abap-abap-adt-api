@@ -112,7 +112,19 @@ Once the server is running, you can interact with it using MCP clients or tools 
     },
 
 ```
-
+MY Trae MCPconfiguration :
+```
+{
+  "mcpServers": {
+    "mcp-abap-abap-adt-api": {
+      "command": "node",
+      "args": [
+        "C:/Users/96000217/Documents/trae_projects/mcp-abap-abap-adt-api/dist/index.js"
+      ]
+    }
+  }
+}
+```
 ## Custom Instruction
 Use this Custom Instruction to explain the tool to your model:
 ```
