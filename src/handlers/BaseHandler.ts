@@ -32,7 +32,7 @@ export abstract class BaseHandler {
     
     // 获取ADT客户端的所有方法名
     const methodNames = Object.getOwnPropertyNames(prototype)
-      .filter(method => method !== 'constructor' && !method.startsWith('_'));
+      .filter(method => method !== 'constructor' && !method.startsWith('_') && method !== 'statelessClone');
     
     methodNames.forEach(methodName => {
       const method = methodName as keyof ADTClient;
