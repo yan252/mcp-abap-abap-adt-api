@@ -1,0 +1,444 @@
+*&---------------------------------------------------------------------*
+*& Report  RDDIT076                                                    *
+*&                                                                     *
+*&---------------------------------------------------------------------*
+REPORT  rddit076  NO STANDARD PAGE HEADING  LINE-SIZE 132.
+
+TABLES: e070.
+
+* global variables for RDDIT076
+PARAMETERS: pg_order LIKE e070-trkorr .
+
+DATA: gv_order_text    LIKE e07t-as4text,
+      gv_col_len       TYPE i,
+      gv_bodend        TYPE i,
+      gv_bodbg         TYPE i,
+      gv_col_end       TYPE i.
+DATA: gc_korrnr_len     TYPE i VALUE '20',
+      gc_fkt_len        TYPE i VALUE '3',
+      gc_stat_len       TYPE i VALUE '4',
+      gc_zielsys_len    TYPE i VALUE '10',
+      gc_kat_len        TYPE i VALUE '4',
+      gc_autor_len      TYPE i VALUE '12',
+      gc_datum_len      TYPE i VALUE '10',
+      gc_uzeit_len      TYPE i VALUE '8',
+      gc_qman_len       TYPE i VALUE '4',
+      gc_zman_len       TYPE i VALUE '4',
+      gc_bg             TYPE i VALUE '1',
+      gc_headrow        TYPE i VALUE '6'.
+DATA: lv_x1 TYPE i.
+
+DATA: gv_reonflag TYPE c.
+
+DATA: BEGIN OF gt_col_info OCCURS 10,
+           col_text(20) TYPE c,
+           col_len TYPE i,
+      END OF gt_col_info.
+
+DATA: gt_ko020        LIKE ko020   OCCURS 0   WITH HEADER LINE,
+      gs_e070         LIKE e070,
+      gt_e071         LIKE e071    OCCURS 0   WITH HEADER LINE,
+      gt_e071k        LIKE e071k   OCCURS 0   WITH HEADER LINE,
+      gs_e07t         LIKE e07t,
+      gs_e070c        LIKE e070c.
+
+DATA: BEGIN OF lt_task OCCURS 10,
+          trkorr LIKE e070-trkorr,
+          strkorr LIKE e070-strkorr,
+     END OF lt_task .
+
+************************************************************************
+START-OF-SELECTION.
+
+* initialize itab GT_COL_INFO
+  CLEAR gt_col_info.
+  gt_col_info-col_text = text-002.
+  gt_col_info-col_len = gc_korrnr_len.
+  APPEND gt_col_info.
+  gt_col_info-col_text = text-003.
+  gt_col_info-col_len = gc_fkt_len.
+  APPEND gt_col_info.
+  gt_col_info-col_text = text-004.
+  gt_col_info-col_len = gc_stat_len.
+  APPEND gt_col_info.
+  gt_col_info-col_text = text-005.
+  gt_col_info-col_len = gc_zielsys_len.
+  APPEND gt_col_info.
+  gt_col_info-col_text = text-006.
+  gt_col_info-col_len = gc_kat_len.
+  APPEND gt_col_info.
+  gt_col_info-col_text = text-007.
+  gt_col_info-col_len = gc_autor_len.
+  APPEND gt_col_info.
+  gt_col_info-col_text = text-008.
+  gt_col_info-col_len = gc_datum_len.
+  APPEND gt_col_info.
+  gt_col_info-col_text = text-009.
+  gt_col_info-col_len = gc_uzeit_len.
+  APPEND gt_col_info.
+  gt_col_info-col_text = text-010.
+  gt_col_info-col_len = gc_korrnr_len.
+  APPEND gt_col_info.
+  gt_col_info-col_text = text-011.
+  gt_col_info-col_len = gc_qman_len.
+  APPEND gt_col_info.
+  gt_col_info-col_text = text-012.
+  gt_col_info-col_len = gc_zman_len.
+  APPEND gt_col_info.
+
+* determine column length of the list
+  gv_col_len = 1.
+  LOOP AT gt_col_info.
+    gv_col_len = gv_col_len + gt_col_info-col_len + 1.
+  ENDLOOP.
+
+* get E070, E070C, E07T information of the ORDER  ( PG_ORDER )
+
+  PERFORM initialize_task_list.
+  PERFORM display_list.
+
+*----------------------------------------------------------------------*
+TOP-OF-PAGE.
+  PERFORM top_of_page USING gc_bg gv_col_len.
+
+TOP-OF-PAGE DURING LINE-SELECTION.
+  PERFORM top_of_page USING gc_bg gv_col_len.
+
+*----------------------------------------------------------------------*
+AT LINE-SELECTION.
+
+  IF ( sy-cucol between gc_bg and gv_col_end ) and
+     ( sy-curow eq gc_headrow or
+      sy-curow between gv_bodbg and gv_bodend ).
+
+
+    CALL FUNCTION 'TR_AUTHORITY_CHECK_ADMIN'
+         EXPORTING
+              iv_adminfunction = 'TABL'
+         EXCEPTIONS
+              e_no_authority   = 1.
+    IF sy-subrc   = 0.
+      CLEAR gv_reonflag.
+    ELSE.
+      gv_reonflag = 'X'.
+    ENDIF.
+
+    CALL FUNCTION 'TRINT_DISPLAY_REQUEST_HEADER'
+         EXPORTING
+              iv_read_only = gv_reonflag
+              iv_trkorr    = gs_e070-trkorr
+         IMPORTING
+              es_e070      = gs_e070
+              es_e070c     = gs_e070c
+              es_e07t      = gs_e07t
+         EXCEPTIONS
+              OTHERS       = 1.
+
+    IF sy-subrc <> 0.
+      MESSAGE ID      sy-msgid
+              TYPE    'E'
+              NUMBER  sy-msgno
+              WITH    sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+    ENDIF.
+
+    IF gv_reonflag is initial.
+      IF gs_e070-trkorr = pg_order.
+        gv_order_text = gs_e07t-as4text.
+      ENDIF.
+
+      PERFORM modify_task_list USING gs_e070 gs_e070c gs_e07t.
+    ENDIF.
+
+    PERFORM display_list.
+
+  ENDIF.
+
+*----------------------------------------------------------------
+* display top of table
+*--------------------------------------------------------------
+FORM top_of_page USING value(lv_bg) TYPE i
+                       value(lv_len) TYPE i.
+
+  DATA:   lv_curpos TYPE i,
+          lv_e TYPE i,
+          lv_korr_pos TYPE i,
+          lv_text_pos TYPE i.
+
+  lv_e = lv_bg + lv_len - 1.
+  lv_korr_pos = lv_bg + 1.
+  lv_text_pos = lv_korr_pos + gc_korrnr_len + 1.
+*
+
+  ULINE AT /lv_bg(lv_len).
+  WRITE: AT /lv_bg sy-vline.
+  WRITE: AT lv_korr_pos pg_order COLOR 4 INTENSIFIED OFF.
+  WRITE: AT lv_text_pos gv_order_text COLOR OFF INTENSIFIED OFF.
+  WRITE: AT lv_e sy-vline.
+  ULINE AT /lv_bg(lv_len).
+  WRITE: AT /lv_bg sy-vline.
+  lv_curpos = lv_bg + 1.
+
+  LOOP AT gt_col_info.
+    PERFORM list_col USING lv_curpos  gt_col_info-col_len
+                           gt_col_info-col_text.
+    lv_curpos = lv_curpos + gt_col_info-col_len + 1.
+  ENDLOOP.
+  ULINE AT /lv_bg(lv_len).
+
+ENDFORM.
+
+*----------------------------------------------------------------
+* form to  display the header of the columns
+*---------------------------------------------------------------
+FORM list_col  USING value(lv_pos) TYPE i
+                     value(lv_len) TYPE i
+                     value(lt_text) TYPE c.
+
+  DATA: lv_pos_syl TYPE i.
+  FIELD-SYMBOLS: <lv_cut_string>.
+
+  ASSIGN lt_text(lv_len) TO <lv_cut_string>.
+
+
+  lv_pos_syl = lv_pos + lv_len.
+
+  WRITE: AT lv_pos <lv_cut_string>  COLOR 1 INTENSIFIED.
+  WRITE: AT lv_pos_syl sy-vline.
+
+ENDFORM.
+
+*---------------------------------------------------------------------*
+*       FORM DISP_E070                                                *
+*---------------------------------------------------------------------*
+FORM disp_e070    USING ps_e070 STRUCTURE e070
+                        ps_e070c STRUCTURE e070c.
+
+  DATA: lv_curpos TYPE i .
+
+  lv_curpos = gc_bg.
+
+  WRITE: AT /lv_curpos sy-vline.
+
+  FORMAT COLOR 4 INTENSIFIED OFF.
+  lv_curpos = lv_curpos + 1.
+  WRITE: AT lv_curpos  ps_e070-trkorr.
+  lv_curpos = lv_curpos + gc_korrnr_len.
+  WRITE: AT lv_curpos sy-vline.
+
+  FORMAT COLOR 2 INTENSIFIED OFF.
+
+  lv_curpos = lv_curpos + 1.
+  WRITE: AT lv_curpos  ps_e070-trfunction.
+  lv_curpos = lv_curpos + gc_fkt_len.
+  WRITE: AT lv_curpos sy-vline.
+
+  lv_curpos = lv_curpos + 1.
+  WRITE: AT lv_curpos  ps_e070-trstatus.
+  lv_curpos = lv_curpos + gc_stat_len.
+  WRITE: AT lv_curpos sy-vline.
+
+  lv_curpos = lv_curpos + 1.
+  WRITE: AT lv_curpos  ps_e070-tarsystem.
+  lv_curpos = lv_curpos + gc_zielsys_len.
+  WRITE: AT lv_curpos sy-vline.
+
+  lv_curpos = lv_curpos + 1.
+  WRITE: AT lv_curpos  ps_e070-korrdev.
+  lv_curpos = lv_curpos + gc_kat_len.
+  WRITE: AT lv_curpos sy-vline.
+
+  lv_curpos = lv_curpos + 1.
+  WRITE: AT lv_curpos  ps_e070-as4user.
+  lv_curpos = lv_curpos + gc_autor_len.
+  WRITE: AT lv_curpos sy-vline.
+
+  lv_curpos = lv_curpos + 1.
+  WRITE: AT lv_curpos  ps_e070-as4date.
+  lv_curpos = lv_curpos + gc_datum_len.
+  WRITE: AT lv_curpos sy-vline.
+
+  lv_curpos = lv_curpos + 1.
+  WRITE: AT lv_curpos  ps_e070-as4time.
+  lv_curpos = lv_curpos + gc_uzeit_len.
+  WRITE: AT lv_curpos sy-vline.
+
+  lv_curpos = lv_curpos + 1.
+  WRITE: AT lv_curpos  ps_e070-strkorr.
+  lv_curpos = lv_curpos + gc_korrnr_len.
+  WRITE: AT lv_curpos sy-vline.
+
+  lv_curpos = lv_curpos + 1.
+  WRITE: AT lv_curpos  ps_e070c-client.
+  lv_curpos = lv_curpos + gc_qman_len.
+  WRITE: AT lv_curpos sy-vline.
+
+  lv_curpos = lv_curpos + 1.
+  WRITE: AT lv_curpos  ps_e070c-tarclient.
+  lv_curpos = lv_curpos + gc_zman_len.
+  WRITE: AT lv_curpos sy-vline.
+
+  FORMAT RESET.
+
+ENDFORM.
+
+*-------------------------------------------------------------
+* form initialize_task_list to built up the list of the task
+*       of an order
+*
+FORM initialize_task_list.
+
+  CLEAR gt_ko020.
+  REFRESH gt_ko020.
+
+  CLEAR lt_task.
+  REFRESH lt_task.
+
+  PERFORM get_e070_entry TABLES gt_e071  gt_e071k USING pg_order
+                                gs_e070 gs_e070c gs_e07t .
+
+* check if PG_ORDER is a ORDER
+
+  IF gs_e070-strkorr eq space.         "order/task is an order
+
+    MOVE-CORRESPONDING gs_e070 TO gt_ko020.
+    MOVE-CORRESPONDING gs_e070c TO gt_ko020.
+    MOVE-CORRESPONDING gs_e07t TO gt_ko020.
+    APPEND gt_ko020.
+
+  ELSE.                                " order/task is a task
+
+* read the corresponding order of the task
+    PERFORM get_e070_entry TABLES gt_e071  gt_e071k
+                           USING gs_e070-strkorr
+                                 gs_e070 gs_e070c gs_e07t .
+
+    MOVE-CORRESPONDING gs_e070 TO gt_ko020.
+    MOVE-CORRESPONDING gs_e070c TO gt_ko020.
+    MOVE-CORRESPONDING gs_e07t TO gt_ko020.
+    APPEND gt_ko020.
+    pg_order = gs_e070-trkorr.
+
+  ENDIF.
+
+* find all tasks belonging to the ORDER , store them in
+* lt_task
+
+  SELECT * FROM e070 WHERE strkorr = pg_order .
+    MOVE-CORRESPONDING  e070 TO lt_task .
+    APPEND lt_task.
+  ENDSELECT.
+
+* initialize row, column values of the list lines.
+  DESCRIBE TABLE lt_task LINES lv_x1.
+  gv_bodbg = gc_headrow + 2.
+  gv_bodend = gv_bodbg + lv_x1.
+  gv_col_end = gc_bg + gv_col_len.
+
+* initialize text of the order
+  gv_order_text = gs_e07t-as4text.
+
+
+* get all information of a task
+  LOOP AT lt_task .
+
+
+   PERFORM get_e070_entry TABLES gt_e071  gt_e071k USING lt_task-trkorr
+                                        gs_e070 gs_e070c gs_e07t.
+
+
+    MOVE-CORRESPONDING gs_e070 TO gt_ko020.
+    MOVE-CORRESPONDING gs_e070c TO gt_ko020.
+    MOVE-CORRESPONDING gs_e07t TO gt_ko020.
+    APPEND gt_ko020.
+
+  ENDLOOP.
+
+ENDFORM.
+
+*-------------------------------------------------------------
+* form display_list to generate the list from GT_KO020
+*-------------------------------------------------------------
+
+FORM display_list.
+  DATA lv_count TYPE i VALUE '0'.
+  LOOP AT gt_ko020.
+
+    MOVE-CORRESPONDING gt_ko020 TO gs_e070.
+    MOVE-CORRESPONDING gt_ko020 TO gs_e070c.
+    MOVE-CORRESPONDING gt_ko020 TO gs_e07t.
+
+* display entries in E070, E07T, E070C
+    PERFORM  disp_e070           USING gs_e070 gs_e070c .
+    HIDE: gs_e070-trkorr.
+
+    lv_count = lv_count + 1.
+
+    IF sy-tabix eq 1.
+      ULINE AT /gc_bg(gv_col_len).
+    ENDIF.
+
+  ENDLOOP.
+  IF lv_count gt 1.
+    ULINE AT /gc_bg(gv_col_len).
+  ENDIF.
+
+  sy-lsind = 0.
+ENDFORM.
+
+*----------------------------------------------------------------
+* form modify_task_list modifies the entries in GT_KO020
+*----------------------------------------------------------------
+FORM modify_task_list  USING  ps_e070  STRUCTURE e070
+                              ps_e070c STRUCTURE e070c
+                              ps_e07t  STRUCTURE e07t.
+
+  LOOP AT gt_ko020 WHERE trkorr = gs_e070-trkorr.
+    MOVE-CORRESPONDING ps_e070  TO gt_ko020.
+    MOVE-CORRESPONDING ps_e070c TO gt_ko020.
+    MOVE-CORRESPONDING ps_e07t  TO gt_ko020.
+    MODIFY gt_ko020 INDEX sy-tabix.
+  ENDLOOP.
+ENDFORM.
+
+*---------------------------------------------------------------------*
+*       FORM GET_E070_ENTRY                                           *
+*---------------------------------------------------------------------*
+FORM get_e070_entry  TABLES pt_e071 pt_e071k
+                     USING value(order) LIKE e070-trkorr
+                            ps_e070  STRUCTURE e070
+                            ps_e070c STRUCTURE e070c
+                            ps_e07t  STRUCTURE e07t .
+
+  CALL FUNCTION 'TR_READ_COMM'
+       EXPORTING
+            wi_dialog        = ' '
+            wi_langu         = sy-langu
+            wi_sel_e070      = 'X'
+            wi_sel_e071      = ' '
+            wi_sel_e071k     = ' '
+            wi_sel_e07t      = 'X'
+            wi_trkorr        = order
+            wi_sel_e070c     = 'X'
+       IMPORTING
+            we_e070          = ps_e070
+            we_e07t          = ps_e07t
+            we_e070c         = ps_e070c
+       TABLES
+            wt_e071          = pt_e071
+            wt_e071k         = pt_e071k
+       EXCEPTIONS
+            not_exist_e070   = 01
+            no_authorization = 02.
+
+
+  IF sy-subrc = 1.
+    MESSAGE i054(tk)    WITH pg_order.
+*   Auftrag/Aufgabe $ existiert nicht
+    SET SCREEN 0.
+    LEAVE SCREEN.
+  ELSEIF sy-subrc = 2.
+    MESSAGE i603(tk) WITH sy-uname.
+    SET SCREEN 0.
+    LEAVE SCREEN.
+  ENDIF.
+ENDFORM.

@@ -113,7 +113,7 @@ export class AbapAdtServer extends Server {
     );
     // 默认使用stateless模式以提高兼容性，特别是对ECC系统
     // 可以通过环境变量SAP_SESSION_TYPE覆盖
-    this.adtClient.stateful = process.env.SAP_SESSION_TYPE === 'stateful' ? session_types.stateful : session_types.stateless;
+    this.adtClient.stateful = (process.env.SAP_SESSION_TYPE || '').trim() === 'stateful' ? session_types.stateful : session_types.stateless;
     
     // 禁用调试日志，避免与MCP JSON-RPC格式冲突
     // console.debug(JSON.stringify({
