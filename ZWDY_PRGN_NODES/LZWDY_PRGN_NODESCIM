@@ -1,0 +1,13 @@
+*&---------------------------------------------------------------------*
+*&  Include           LWDY_PRGN_NODESCIM
+*&---------------------------------------------------------------------*
+CLASS cl_wdr_inplace_handler IMPLEMENTATION.
+
+  METHOD on_wd_event.
+    CASE action.
+      WHEN 'WDR_CLOSE'.
+        PERFORM leave_wdr_html_viewer.
+        LEAVE TO SCREEN 0.
+    ENDCASE.
+  ENDMETHOD.                    "on_sapevent
+ENDCLASS.

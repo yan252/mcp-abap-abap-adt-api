@@ -1,0 +1,81 @@
+*----------------------------------------------------------------------
+***INCLUDE LWDY_PRGN_NODESO01 .
+*----------------------------------------------------------------------
+*&---------------------------------------------------------------------*
+*&      Module  STATUS_0001  OUTPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE STATUS_0001 OUTPUT.
+  SET PF-STATUS 'POPUP'.
+  SET TITLEBAR 'TIT'.
+
+  LOOP AT SCREEN.
+    IF FMODE = C_DISPLAY_MODE.
+      IF SCREEN-GROUP1 EQ '01'.
+        SCREEN-INPUT = '0'.
+        MODIFY SCREEN.
+      ENDIF.
+    ENDIF.
+    IF FMODE = C_EDIT_MODE OR FMODE = C_CREATE_MODE.
+      IF SCREEN-GROUP2 EQ '01'.
+        SCREEN-ACTIVE = '0'.
+        MODIFY SCREEN.
+      ENDIF.
+    endif.
+    if screen-group2 = 'APP'.
+      if fmode = c_create_mode.
+        screen-input = '1'.
+      else. "input field 'application'
+*         and not g_appl_type_prop-application_type = cl_wdy_pfcg_appl_type_standard=>co_application_type. "standard
+        screen-input = '0'.
+      endif.
+      modify screen.
+    ENDIF.
+
+    " Option Smart Client cannot be choosed it is only
+    " possibly to switch it of
+    IF ( SCREEN-GROUP2 EQ 'CLT' AND RB_SMCL = ABAP_FALSE )
+       or screen-group2 = 'HID'. "FH 2010/08/05
+      SCREEN-ACTIVE = '0'.
+      MODIFY SCREEN.
+    ENDIF.
+  ENDLOOP.
+
+  IF RB_EXT = 'X'.
+    LOOP AT SCREEN INTO SCREEN.
+      CHECK SCREEN-NAME = 'RB_EXT' OR
+            SCREEN-NAME = 'RB_INT' OR
+            SCREEN-NAME = '%#AUTOTEXT012'.
+
+      SCREEN-ACTIVE = '0'.
+      MODIFY SCREEN.
+    ENDLOOP.
+  ELSE.
+    MESSAGE W001(00) WITH text-010. "#EC MG_PAR_CNT
+  ENDIF.
+
+* application type can also modify stuff
+    LOOP AT SCREEN INTO SCREEN.
+      check screen-group4 = 'APT'.
+      call method g_appl_type_prop-instance->change_screen_attributes
+        exporting
+          name = screen-name
+        CHANGING
+          active = screen-active
+          input  = screen-input
+          required = screen-required.
+      MODIFY SCREEN.
+    ENDLOOP.
+
+  param_cntrl-lines = 20.
+ENDMODULE.                 " STATUS_0001  OUTPUT
+
+*&---------------------------------------------------------------------*
+*&      Module  ATTR_LOOP_LINE  OUTPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE ATTR_LOOP_LINE OUTPUT.
+  perform attr_loop_line.
+ENDMODULE.                 " ATTR_LOOP_LINE  OUTPUT

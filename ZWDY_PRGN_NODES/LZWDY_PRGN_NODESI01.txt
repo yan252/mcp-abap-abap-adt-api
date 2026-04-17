@@ -1,0 +1,103 @@
+*----------------------------------------------------------------------
+***INCLUDE LWDY_PRGN_NODESI01 .
+*----------------------------------------------------------------------
+*&---------------------------------------------------------------------*
+*&      Module  USER_COMMAND_0100  INPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE USER_COMMAND_0100 INPUT.
+  IF RB_INT = 'X'.
+    MESSAGE W001(00) WITH text-010. "#EC MG_PAR_CNT
+  ENDIF.
+
+  CASE ok_code.
+    WHEN 'OK'.
+      if wdy_name is initial.
+        message e002.
+      else.
+        if wdy_text is initial.
+          perform get_wda_text_new changing wdy_text.
+        endif.
+        PERFORM check_wdy.
+        CLEAR ok_code.
+        SET SCREEN 0.
+      endif.
+    WHEN 'SDEL'.
+      PERFORM delete_param_line.
+      CLEAR ok_code.
+
+  ENDCASE.
+ENDMODULE.                 " USER_COMMAND_0100  INPUT
+
+*&---------------------------------------------------------------------*
+*&      Module  EXIT_DYNP_0100  INPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE EXIT_DYNP_0100 INPUT.
+  RAISE action_cancelled.
+ENDMODULE.                 " EXIT_DYNP_0100  INPUT
+
+*&---------------------------------------------------------------------*
+*&      Module  NAME_F4_KEY  INPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE NAME_F4_KEY INPUT.
+  perform name_f4_key.
+ENDMODULE.                 " NAME_F4_KEY  INPUT
+
+*&---------------------------------------------------------------------*
+*&      Module  PARAM_F4_KEY  INPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE PARAM_F4_KEY INPUT.
+  perform param_f4_key.
+ENDMODULE.                 " PARAM_F4_KEY  INPUT
+
+*&---------------------------------------------------------------------*
+*&      Module  PARAM_CNTRL_MODIFY  INPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE PARAM_CNTRL_MODIFY INPUT.
+  CHECK ok_code NE 'SDEL'.
+  CHECK param_lin IS NOT INITIAL.
+  PERFORM check_param USING param_lin
+                      CHANGING new_entry.
+  IF new_entry = 'X'.
+    APPEND param_lin TO i_param.
+  ELSE.
+    MODIFY i_param
+      FROM param_lin
+      INDEX param_cntrl-current_line.
+  ENDIF.
+
+ENDMODULE.                 " PARAM_CNTRL_MODIFY  INPUT
+
+*&---------------------------------------------------------------------*
+*&      Module  UPDATE_PARAMETER  INPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE UPDATE_PARAMETER INPUT.
+  PERFORM update_parameter.
+ENDMODULE.                 " UPDATE_PARAMETER  INPUT
+*&---------------------------------------------------------------------*
+*&      Module  VALUE_F4_KEY  INPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE VALUE_F4_KEY INPUT.
+  perform value_f4_key.
+ENDMODULE.                 " VALUE_F4_KEY  INPUT
+*&---------------------------------------------------------------------*
+*&      Module  CONFIG_F4_KEY  INPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE config_F4_KEY INPUT.
+  perform config_f4_key.
+ENDMODULE.                 " NAME_F4_KEY  INPUT
