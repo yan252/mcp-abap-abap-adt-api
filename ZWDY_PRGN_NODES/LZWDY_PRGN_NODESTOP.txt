@@ -1,0 +1,138 @@
+FUNCTION-POOL ZWDY_PRGN_NODES MESSAGE-ID SWDP_RUNTIME.
+
+* --- Mode constants
+constants: c_create_mode value 'C',
+           c_edit_mode value 'E',
+           c_display_mode value 'D',
+           c_http value '0',
+           c_https value 'S',
+           c_http_name(4) value 'HTTP',
+           c_https_name(5) value 'HTTPS',
+           c_browser(7) value 'BROWSER',
+           c_run_ext value 'E',
+           c_run_int value 'I',
+           c_run_in_sclient_param(13) value 'sap-wd-run-sc',
+           c_run_auto_detect(18)      value 'sap-wd-auto-detect',
+           c_config_param_1(17)       value 'WDCONFIGURATIONID',
+           c_config_param_2(15)       value 'SAP-WD-CONFIGID'.
+
+* --- Screen Elements
+data: wdy_name      type wdy_application_name,  "Web-Dynpro-Anw Name
+      wdy_text      type bxmnodes-text,    "Web-Dynpro-App Beschreibung
+      wdy_config    type wdy_config_id,
+      pr_https      type c,                     "Ankreuzfeld fur Protokoll
+      rb_ext        type c,                     "Radiobuttons fur Ausgabenverfahren
+      rb_int        type c,
+      rb_browser    type c,
+      rb_smcl       type c,
+      rb_auto       type c,
+      wdy_url       like bxmnodes-url,
+      agr_name      type agr_name.
+
+data param_lin type param_lin.
+data: i_param type wdy_prgn_name_values.
+* ---
+
+* Handling URL properties
+data: prop_tab type wdy_app_property_table,
+      prop_lin type line of wdy_app_property_table,
+      predef_prop_tab type wdy_app_prop_def_tab,
+      predef_prop_lin type line of wdy_app_prop_def_tab,
+      avail_prop_tab type table of wdy_param_f4_info,
+      avail_prop_lin type wdy_param_f4_info,
+      field_tab type table of dfies,
+      field_lin type dfies.
+
+* Handling transaction screens
+data: application type rsstcd-para_value,
+      https       type rsstcd-para_value,
+      startmode   type rsstcd-para_value,
+      wdconfigurationid type rsstcd-para_value,
+      fscr_mode   type c.
+
+data: gen_url type string,
+      gen_text type string,
+      fmode type c,
+      no_reload type c,
+      new_entry type c,
+      ok_code(20) type c.        "exit code
+
+* === Toolbar ==========
+* toolbar global data
+data:
+  g_appl_type_prop_tab type wdy_pfcg_appl_type_props,
+  g_appl_type_prop like line of g_appl_type_prop_tab,
+  g_toolbar_test_mode type string,
+
+* controls for toolbar
+  gr_container_toolbar type ref to cl_gui_custom_container,
+  gr_toolbar  type ref to cl_gui_toolbar.
+
+* === additional controls
+controls: param_cntrl type tableview using screen 0100.
+
+*----------------------------------------------------------------------
+*       CLASS cl_wdr_inplace_handler DEFINITION
+*----------------------------------------------------------------------
+*
+*----------------------------------------------------------------------
+class cl_wdr_inplace_handler definition.
+
+  public section.
+    methods: on_wd_event
+               for event wd_event of cl_gui_wdr_viewer
+                 importing action parameters.               "#EC NEEDED
+
+endclass.                    "cl_myevent_handler DEFINITION
+
+*&---------------------------------------------------------------------*
+*&       Class LCL_EVENT_RECEIVER
+*&---------------------------------------------------------------------*
+*        Text
+*----------------------------------------------------------------------*
+class lcl_toolbar_event_receiver definition.
+  public section.
+
+    methods set_handler
+      importing
+        activation type wdy_boolean.
+  private section.
+    data:
+      m_menu type ref to cl_ctmenu.
+    methods function_select
+            for event function_selected of cl_gui_toolbar
+            importing fcode
+                      sender.
+    methods dropdown
+            for event dropdown_clicked of cl_gui_toolbar
+            importing fcode
+                      posx
+                      posy
+                      sender.
+endclass.                "LCL_TOOLBAR_EVENT_RECEIVER
+
+*----------------------------------------------------------------------
+*       CLASS lcl_toolbar_event_receiver_appl_type DEFINITION
+*----------------------------------------------------------------------
+*
+*----------------------------------------------------------------------
+class lcl_toolbar_event_receiver_app definition.
+  public section.
+    methods on_button_info_changed
+      for event button_info_changed of if_wdy_pfcg_application_type
+      importing fcode
+                icon
+                text
+                quickinfo.
+    methods set_handler
+      importing
+        activation type wdy_boolean.
+endclass.                    "lcl_toolbar_event_receiver_appl_type DEFINITION
+
+* --- HTML Viewer
+data: gr_event_receiver type ref to lcl_toolbar_event_receiver,
+      gr_event_receiver_app type ref to lcl_toolbar_event_receiver_app,
+      wdr_html_viewer    type ref to cl_gui_wdr_viewer,
+      wdp_smartclient_viewer type ref to cl_gui_webdynpro_viewer,
+      wdp_html_container type ref to cl_gui_custom_container,
+      wdr_inplace_handler type ref to cl_wdr_inplace_handler.

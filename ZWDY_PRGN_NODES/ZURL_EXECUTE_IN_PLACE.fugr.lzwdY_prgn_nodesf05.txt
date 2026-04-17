@@ -1,0 +1,138 @@
+FUNCTION zurl_execute_in_place.
+*"----------------------------------------------------------------------
+*"*"Local Interface:
+*"  IMPORTING
+*"    VALUE(PROTOCOL) TYPE  STRING OPTIONAL
+*"    VALUE(INTERNALMODE) TYPE  CHAR01 DEFAULT 'X'
+*"    VALUE(SMARTCLIENT) TYPE  CHAR01 OPTIONAL
+*"    VALUE(CONTAINER_NAME) TYPE  SCRFNAME OPTIONAL
+*"    VALUE(SUPPRESS_OUTPUT) TYPE  CHAR01 OPTIONAL
+*"    VALUE(TRY_TO_USE_SAPGUI_THEME) TYPE  CHAR01 DEFAULT ''
+*"    VALUE(IN_URL) TYPE  STRING
+*"  CHANGING
+*"    REFERENCE(VIEWER) TYPE REF TO CL_GUI_WDR_VIEWER OPTIONAL
+*"  EXCEPTIONS
+*"    INVALID_APPLICATION
+*"    BROWSER_NOT_STARTED
+*"    ACTION_CANCELLED.
+*"----------------------------------------------------------------------
+*210，200窗口，只有定制控件HTML,OK_CODE(确定)
+**210
+*PROCESS BEFORE OUTPUT.
+*  MODULE STATUS_0200.
+*  MODULE PBO_0210.
+*
+*PROCESS AFTER INPUT.
+*  MODULE EXIT_DYNP_0210 AT EXIT-COMMAND.
+*  MODULE USER_COMMAND_0200.
+**200
+*PROCESS BEFORE OUTPUT.
+*  MODULE STATUS_0200.
+*  MODULE PBO_0200.
+*
+*PROCESS AFTER INPUT.
+*  MODULE EXIT_DYNP_0200 AT EXIT-COMMAND.
+*  MODULE USER_COMMAND_0200.
+**HTMLVIEW状态为空，
+**HTMLVIEW标题：&1
+  DATA: char_url TYPE char1024.
+
+  gen_url = in_url.
+
+  CHECK suppress_output IS INITIAL.
+
+  wdr_html_viewer = viewer.
+
+  IF container_name IS INITIAL.
+    fscr_mode = 'X'.
+  ELSE.
+    CLEAR fscr_mode.
+  ENDIF.
+
+  char_url = gen_url.
+  IF internalmode EQ space AND smartclient EQ space.
+    TRY.
+        DATA: l_empty_co    TYPE REF TO cl_gui_container.   "#EC NEEDED
+        CREATE OBJECT wdr_html_viewer
+          EXPORTING
+            parent             = l_empty_co
+            protocol           = protocol
+          EXCEPTIONS
+            html_control_error = 1.
+
+        IF sy-subrc EQ 0.
+          CALL METHOD wdr_html_viewer->('DETACH_URL_IN_BROWSER')
+            EXPORTING
+              url = char_url.
+          cl_gui_cfw=>flush( ).
+        ELSE.
+          CALL FUNCTION 'CALL_BROWSER'
+            EXPORTING
+              url                    = char_url
+            EXCEPTIONS
+              frontend_not_supported = 1
+              frontend_error         = 2
+              prog_not_found         = 3
+              no_batch               = 4
+              unspecified_error      = 5.
+          IF sy-subrc NE 0.
+            RAISE browser_not_started.
+          ENDIF.
+        ENDIF.
+
+      CATCH cx_root.
+        CALL FUNCTION 'CALL_BROWSER'
+          EXPORTING
+            url                    = char_url
+          EXCEPTIONS
+            frontend_not_supported = 1
+            frontend_error         = 2
+            prog_not_found         = 3
+            no_batch               = 4
+            unspecified_error      = 5.
+        IF sy-subrc NE 0.
+          RAISE browser_not_started.
+        ENDIF.
+    ENDTRY.
+  ELSEIF internalmode NE space AND smartclient EQ space.
+    DATA off  TYPE i.
+    DATA len  TYPE i.
+
+    FIND  REGEX  '[Zz]\\w+(?=\\?)' IN char_url  MATCH OFFSET  off  MATCH LENGTH len .
+    IF sy-subrc = 0.
+      wdy_name = char_url+off(len).
+      PERFORM get_wda_text.
+    ENDIF.
+
+    IF container_name IS INITIAL.
+      CALL SCREEN 200.
+    ELSE.
+      IF wdr_html_viewer IS INITIAL.
+        PERFORM initialize_viewer USING container_name.
+      ENDIF.
+      PERFORM show_url_in_viewer USING gen_url.
+    ENDIF.
+  ELSEIF internalmode EQ space AND smartclient NE space.
+    CALL METHOD cl_gui_frontend_services=>execute
+      EXPORTING
+        application = 'sapwdgui.exe'
+        parameter   = gen_url
+      EXCEPTIONS
+        OTHERS      = 99.
+    IF sy-subrc NE 0.
+      MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+            WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4
+          RAISING browser_not_started.
+    ENDIF.
+  ELSEIF internalmode NE space AND smartclient NE space.
+    PERFORM get_wda_text.
+    IF container_name IS INITIAL.
+      CALL SCREEN 210.
+    ELSE.
+      PERFORM initialize_smartclient_viewer USING container_name.
+    ENDIF.
+  ENDIF.
+
+  viewer = wdr_html_viewer.
+
+ENDFUNCTION.

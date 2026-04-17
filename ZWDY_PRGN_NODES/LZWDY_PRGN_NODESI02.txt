@@ -1,0 +1,47 @@
+*----------------------------------------------------------------------
+***INCLUDE LWDY_PRGN_NODESI02 .
+*----------------------------------------------------------------------
+*&---------------------------------------------------------------------*
+*&      Module  EXIT_DYNP_0200  INPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE EXIT_DYNP_0200 INPUT.
+  CASE ok_code.
+    WHEN 'BACK' OR 'CANC' OR 'EXIT'.
+      CLEAR ok_code.
+      PERFORM leave_wdr_html_viewer.
+      LEAVE TO SCREEN 0.
+  ENDCASE.
+
+ENDMODULE.                 " EXIT_DYNP_0200  INPUT
+
+*&---------------------------------------------------------------------*
+*&      Module  USER_COMMAND_0200  INPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE USER_COMMAND_0200 INPUT.
+  IF ok_code IS NOT INITIAL.
+    CALL METHOD cl_gui_cfw=>dispatch.
+  ELSE.
+    no_reload = 'X'.
+  ENDIF.
+
+  CLEAR ok_code.
+ENDMODULE.                 " USER_COMMAND_0200  INPUT
+
+*&---------------------------------------------------------------------*
+*&      Module  EXIT_DYNP_0210  INPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE EXIT_DYNP_0210 INPUT.
+  CASE ok_code.
+    WHEN 'BACK' OR 'CANC' OR 'EXIT'.
+      CLEAR ok_code.
+      PERFORM leave_wdr_smartclient_viewer.
+      LEAVE TO SCREEN 0.
+  ENDCASE.
+
+ENDMODULE.                 " EXIT_DYNP_0210  INPUT

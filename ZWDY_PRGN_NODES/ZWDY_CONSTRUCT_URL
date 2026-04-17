@@ -1,0 +1,118 @@
+FUNCTION zwdy_construct_url.
+*"----------------------------------------------------------------------
+*"*"本地接口：
+*"  IMPORTING
+*"     VALUE(PROTOCOL) TYPE  STRING OPTIONAL
+*"     VALUE(INTERNALMODE) TYPE  CHAR01 DEFAULT 'X'
+*"     VALUE(APPLICATION) TYPE  WDY_APPLICATION_NAME
+*"     VALUE(PARAMETERS) TYPE  TIHTTPNVP OPTIONAL
+*"     VALUE(TRY_TO_USE_SAPGUI_THEME) TYPE  CHAR01 DEFAULT ''
+*"     VALUE(SUPPRESS_OUTPUT) TYPE  CHAR01 OPTIONAL
+*"  EXPORTING
+*"     VALUE(OUT_URL) TYPE  STRING
+*"  EXCEPTIONS
+*"      INVALID_APPLICATION
+*"----------------------------------------------------------------------
+  DATA: app_str     TYPE string,
+        app_wdy     TYPE wdy_application_name,
+        l_exist     TYPE c,
+        lt_param    TYPE TABLE OF param_lin WITH KEY name,
+        l_param_lin LIKE param_lin.
+
+*  IF protocol IS INITIAL.
+*    protocol =  c_http_name.
+*  ENDIF.
+
+  app_wdy = application.
+
+  CALL METHOD ('CL_WDY_MD_APPLICATION')=>('CHECK_EXISTENCY')
+    EXPORTING
+      name     = app_wdy
+    RECEIVING
+      existent = l_exist.
+
+  IF l_exist NE 'X'.
+    RAISE invalid_application.
+  ENDIF.
+
+  app_str = application.
+  i_param = parameters.
+  PERFORM review_parameters.
+
+  IF internalmode = 'X'.
+    param_lin-name = cl_wdr_client_constants=>client_sapgui.
+    param_lin-value = 'X'.
+    APPEND param_lin TO i_param.
+  ENDIF.
+
+  lt_param = i_param.
+
+  READ TABLE lt_param WITH KEY name = c_config_param_1 TRANSPORTING NO FIELDS.
+  IF sy-subrc <> 0.
+    READ TABLE lt_param WITH KEY name = c_config_param_2 TRANSPORTING NO FIELDS.
+  ENDIF.
+
+  IF sy-subrc <> 0 AND NOT wdy_config IS INITIAL.
+*    data:
+*      l_escaped type string,
+*      l_unescaped type string.
+*    l_escaped = wdy_config.
+*    l_unescaped = cl_http_server=>unescape_url( l_escaped ).
+    l_param_lin-name = c_config_param_1.
+*    l_param_lin-value = l_unescaped.
+    l_param_lin-value = wdy_config.
+    APPEND l_param_lin TO lt_param.
+  ENDIF.
+
+  " If the SAPGUI uses the Corbu theme this can be forwarded to the application, if
+  "     no theme parameter is supplied
+  " AND no theme is configured using global settings
+  IF try_to_use_sapgui_theme = abap_true.
+    DATA has_theme_param TYPE abap_bool.
+
+    LOOP AT lt_param INTO l_param_lin.
+      IF l_param_lin-name CP 'sap-theme' OR                 "#EC NOTEXT
+         l_param_lin-name CP 'WDTHEMEROOT' OR               "#EC NOTEXT
+         l_param_lin-name CP 'sap-cssurl' OR                "#EC NOTEXT
+         l_param_lin-name CP 'sap-ep-themeroot'.            "#EC NOTEXT
+        has_theme_param = abap_true.
+        EXIT.
+      ENDIF.
+    ENDLOOP.
+    IF has_theme_param = abap_false.
+      DATA value TYPE string.
+      SELECT SINGLE value FROM wdy_settings INTO value WHERE set_name = 'STANDARD' AND property_name = 'WDTHEMEROOT'. "#EC NOTEXT
+      IF value = ''.
+        DATA theme_name TYPE string.
+        cl_gui_resources=>get_themename( IMPORTING themename = theme_name ).
+        CASE theme_name.
+          WHEN 'Corbu'.
+            l_param_lin-name  = 'sap-theme'.                "#EC NOTEXT
+            l_param_lin-value = 'sap_corbu'.                "#EC NOTEXT
+            INSERT l_param_lin INTO TABLE lt_param.
+        ENDCASE.
+      ENDIF.
+    ENDIF.
+  ENDIF.
+
+  CALL METHOD ('CL_WD_UTILITIES')=>('CONSTRUCT_WD_URL')
+    EXPORTING
+      application_name = app_str
+      in_protocol      = protocol
+      in_parameters    = lt_param
+    IMPORTING
+      out_absolute_url = gen_url.
+
+  out_url = gen_url.
+*--------------------------------------------------------------------*
+*/*  CALL FUNCTION 'ZWDY_UPDATE_URL'
+*    EXPORTING
+*      im_application  = application
+*      internalmode    = internalmode
+*      suppress_output = suppress_output
+*    CHANGING
+*      ux_url          = out_url.
+
+*/
+
+ENDFUNCTION.

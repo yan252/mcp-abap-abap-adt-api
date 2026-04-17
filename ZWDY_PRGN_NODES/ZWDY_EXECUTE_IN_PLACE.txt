@@ -1,0 +1,154 @@
+FUNCTION zwdy_execute_in_place.
+*"----------------------------------------------------------------------
+*"*"本地接口：
+*"  IMPORTING
+*"     VALUE(PROTOCOL) TYPE  STRING OPTIONAL
+*"     VALUE(INTERNALMODE) TYPE  CHAR01 DEFAULT 'X'
+*"     VALUE(SMARTCLIENT) TYPE  CHAR01 OPTIONAL
+*"     VALUE(APPLICATION) TYPE  WDY_APPLICATION_NAME
+*"     REFERENCE(CONTAINER_NAME) TYPE  SCRFNAME OPTIONAL
+*"     REFERENCE(PARAMETERS) TYPE  TIHTTPNVP OPTIONAL
+*"     REFERENCE(SUPPRESS_OUTPUT) TYPE  CHAR01 OPTIONAL
+*"     REFERENCE(TRY_TO_USE_SAPGUI_THEME) TYPE  CHAR01 DEFAULT ''
+*"  EXPORTING
+*"     REFERENCE(OUT_URL) TYPE  STRING
+*"  CHANGING
+*"     REFERENCE(VIEWER) TYPE REF TO  CL_GUI_WDR_VIEWER OPTIONAL
+*"  EXCEPTIONS
+*"      INVALID_APPLICATION
+*"      BROWSER_NOT_STARTED
+*"      ACTION_CANCELLED
+*"----------------------------------------------------------------------
+  DATA: char_url TYPE char1024.
+
+  CALL FUNCTION 'ZWDY_CONSTRUCT_URL'
+    EXPORTING
+      protocol                = protocol
+      internalmode            = internalmode
+      application             = application
+      parameters              = parameters
+      try_to_use_sapgui_theme = try_to_use_sapgui_theme
+      suppress_output         = suppress_output
+    IMPORTING
+      out_url                 = gen_url
+    EXCEPTIONS
+      invalid_application     = 1.
+  IF sy-subrc NE 0.
+    RAISE invalid_application.
+  ENDIF.
+  CHECK gen_url IS NOT INITIAL.
+
+  out_url = gen_url.
+
+  CHECK suppress_output IS INITIAL.
+
+  wdr_html_viewer = viewer.
+
+  wdy_name = application.
+  IF container_name IS INITIAL.
+    fscr_mode = 'X'.
+  ELSE.
+    CLEAR fscr_mode.
+  ENDIF.
+
+  char_url = gen_url.
+  IF internalmode EQ space AND smartclient EQ space.
+    TRY.
+        DATA: l_empty_co    TYPE REF TO cl_gui_container.   "#EC NEEDED
+        CREATE OBJECT wdr_html_viewer
+          EXPORTING
+            parent             = l_empty_co
+            protocol           = protocol
+          EXCEPTIONS
+            html_control_error = 1.
+
+        IF sy-subrc EQ 0.
+          CALL METHOD wdr_html_viewer->('DETACH_URL_IN_BROWSER')
+            EXPORTING
+              url = char_url.
+          cl_gui_cfw=>flush( ).
+        ELSE.
+          CALL FUNCTION 'CALL_BROWSER'
+            EXPORTING
+              url                    = char_url
+            EXCEPTIONS
+              frontend_not_supported = 1
+              frontend_error         = 2
+              prog_not_found         = 3
+              no_batch               = 4
+              unspecified_error      = 5.
+          IF sy-subrc NE 0.
+            RAISE browser_not_started.
+          ENDIF.
+        ENDIF.
+
+      CATCH cx_root.
+        CALL FUNCTION 'CALL_BROWSER'
+          EXPORTING
+            url                    = char_url
+          EXCEPTIONS
+            frontend_not_supported = 1
+            frontend_error         = 2
+            prog_not_found         = 3
+            no_batch               = 4
+            unspecified_error      = 5.
+        IF sy-subrc NE 0.
+          RAISE browser_not_started.
+        ENDIF.
+    ENDTRY.
+  ELSEIF internalmode NE space AND smartclient EQ space.
+    PERFORM get_wda_text.
+    IF container_name IS INITIAL.
+      CALL SCREEN 200.
+    ELSE.
+      IF wdr_html_viewer IS INITIAL.
+        PERFORM initialize_viewer USING container_name.
+      ENDIF.
+      PERFORM show_url_in_viewer USING gen_url.
+    ENDIF.
+  ELSEIF internalmode EQ space AND smartclient NE space.
+    CALL METHOD cl_gui_frontend_services=>execute
+      EXPORTING
+        application = 'sapwdgui.exe'
+        parameter   = gen_url
+      EXCEPTIONS
+        OTHERS      = 99.
+    IF sy-subrc NE 0.
+      MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+            WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4
+          RAISING browser_not_started.
+    ENDIF.
+  ELSEIF internalmode NE space AND smartclient NE space.
+    PERFORM get_wda_text.
+    IF container_name IS INITIAL.
+      CALL SCREEN 210.
+    ELSE.
+      PERFORM initialize_smartclient_viewer USING container_name.
+    ENDIF.
+  ENDIF.
+
+  viewer = wdr_html_viewer.
+
+*20210820 测试将URL写入粘贴板
+  DATA:BEGIN OF lt_cli OCCURS 0,
+         line(500) TYPE c,
+       END OF lt_cli.
+  DATA lv_lines TYPE i VALUE 1.
+  DATA zgui TYPE char4 .
+  IMPORT p1 = zgui FROM MEMORY ID 'ZGUI'.
+  EXPORT p1 = gen_url TO MEMORY ID 'ZGUI_URL'."将获取的URL再回写缓存
+
+  IF zgui IS NOT INITIAL.
+    APPEND VALUE #( line = gen_url ) TO lt_cli.
+    CALL METHOD cl_gui_frontend_services=>clipboard_export
+*      EXPORTING
+*        no_auth_check = 'X'
+      IMPORTING
+        data   = lt_cli[]
+      CHANGING
+        rc     = lv_lines
+      EXCEPTIONS
+        OTHERS = 99.
+    FREE MEMORY ID 'ZGUI'.
+  ENDIF.
+ENDFUNCTION.

@@ -1,0 +1,48 @@
+*----------------------------------------------------------------------
+***INCLUDE LWDY_PRGN_NODESO02 .
+*----------------------------------------------------------------------
+*&---------------------------------------------------------------------*
+*&      Module  STATUS_0200  OUTPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE status_0200 OUTPUT.
+  SET PF-STATUS 'HTMLVIEW'.
+  SET TITLEBAR 'HTMLVIEW' WITH gen_text.
+
+ENDMODULE.                 " STATUS_0200  OUTPUT
+
+*&---------------------------------------------------------------------*
+*&      Module  PBO_0200  OUTPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE pbo_0200 OUTPUT.
+
+  IF no_reload IS INITIAL.
+    IF wdr_html_viewer IS INITIAL.
+      PERFORM initialize_viewer USING space.
+    ENDIF.
+    PERFORM show_url_in_viewer USING gen_url.
+  ELSE.
+    CLEAR no_reload.
+  ENDIF.
+
+ENDMODULE.                 " PBO_0200  OUTPUT
+
+*&---------------------------------------------------------------------*
+*&      Module  PBO_0210  OUTPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE pbo_0210 OUTPUT.
+  PERFORM initialize_smartclient_viewer USING space.
+ENDMODULE.                 " PBO_0210  OUTPUT
+*&---------------------------------------------------------------------*
+*&      Module  SET_TOOLBAR  OUTPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+module SET_TOOLBAR output.
+  perform set_toolbar.
+endmodule.                 " SET_TOOLBAR  OUTPUT
