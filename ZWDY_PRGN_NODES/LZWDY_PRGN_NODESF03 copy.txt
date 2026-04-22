@@ -1,0 +1,404 @@
+***INCLUDE LWDY_PRGN_NODESF03 .
+*
+* This include contains all toolbar related code for the PFCG detail UI
+*----------------------------------------------------------------------
+*&---------------------------------------------------------------------*
+*&       Class (Implementation)  lcl_event_receiver
+*&---------------------------------------------------------------------*
+*        Text
+*----------------------------------------------------------------------*
+class lcl_toolbar_event_receiver implementation.
+  method set_handler.
+    assert not gr_toolbar is initial.
+    set handler me->function_select
+        for gr_toolbar activation activation.
+
+    set handler me->dropdown
+        for gr_toolbar activation activation.
+
+  endmethod.                    "set_handler
+
+  method function_select.
+    data:
+      l_fcode1 type string,
+      l_fcode2 type string,
+      l_fcode3 type string,
+
+      l_description type wdy_md_description.
+
+    check ok_code ne 'CANC'.
+
+    split fcode at '_' into l_fcode1 l_fcode2 l_fcode3.
+    assert l_fcode1 = 'TB'.
+
+    case l_fcode2.
+      when 'MENU'.
+        case l_fcode3.
+          when 'TEST'.
+            perform execute using g_toolbar_test_mode.
+          when others.
+        endcase.
+      when 'TEST'.
+        perform set_toolbar_test_mode using l_fcode3.
+        perform execute using l_fcode3.
+      when 'APPL'.
+        perform change_appl_type using l_fcode3.
+      when g_appl_type_prop-application_type.
+        l_description = wdy_text.
+        call method g_appl_type_prop-instance->function_select
+          exporting
+            fcode         = fcode
+            agr_name      = agr_name
+          changing
+            application   = wdy_name
+            configuration = wdy_config
+            parameters    = i_param
+            description   = l_description.
+        if l_description ne wdy_text(60).
+          wdy_text = l_description.
+        endif.
+      when others.
+    endcase.
+  endmethod.                    "function_select
+  method dropdown.
+  endmethod.                    "dropdown
+endclass.                "lcl_toolbar event_receiver
+
+*----------------------------------------------------------------------
+*       CLASS lcl_toolbar_event_receiver_app IMPLEMENTATION
+*----------------------------------------------------------------------
+*
+*----------------------------------------------------------------------
+class lcl_toolbar_event_receiver_app implementation.
+  method set_handler.
+    assert not g_appl_type_prop-instance is initial.
+    set handler me->on_button_info_changed
+        for g_appl_type_prop-instance activation activation.
+  endmethod.                    "set_handler
+  method on_button_info_changed.
+    call method gr_toolbar->set_button_info
+      exporting
+        fcode     = fcode
+        icon      = icon
+        text      = text
+        quickinfo = quickinfo
+      exceptions
+        others    = 3.
+    assert sy-subrc = 0.
+  endmethod.                    "on_button_info_changed
+endclass.                    "lcl_toolbar_event_receiver_app IMPLEMENTATION
+
+*&---------------------------------------------------------------------*
+*&      Form  SET_TOOLBAR
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+form set_toolbar .
+  data:
+    ls_event type cntl_simple_event,
+    lt_event type cntl_simple_events,
+    lr_menu type ref to cl_ctmenu,
+    lt_ctxmenu type ttb_btnmnu,
+    lt_buttons type ttb_button,
+    lt_ctxmenu_appl_type type ttb_btnmnu,
+    lt_buttons_appl_type type ttb_button.
+
+  perform set_appl_type.
+
+  if gr_toolbar is initial.
+    assert gr_container_toolbar is initial.
+    assert gr_event_receiver is initial.
+
+*   create container and toolbar control
+    create object gr_container_toolbar
+      exporting
+        container_name = 'CC_TOOLBAR'.
+
+    create object gr_toolbar
+      exporting
+        parent             = gr_container_toolbar
+        lifetime           = cl_gui_toolbar=>lifetime_imode
+      exceptions
+        cntl_install_error = 1
+        cntl_error         = 2.
+
+*   register events
+    ls_event-eventid = gr_toolbar->m_id_function_selected.
+    ls_event-appl_event = 'X'.
+    append ls_event to lt_event.
+
+    ls_event-eventid = gr_toolbar->m_id_dropdown_clicked.
+    ls_event-appl_event = 'X'.
+    append ls_event to lt_event.
+
+    call method gr_toolbar->set_registered_events
+      exporting
+        events = lt_event.
+
+    create object gr_event_receiver.
+
+    gr_event_receiver->set_handler( abap_true ).
+
+* menu for application types
+    perform get_application_menu
+      changing lt_ctxmenu
+               lt_buttons.
+
+* menu to test application in several config modes
+    perform get_test_menu
+      changing lt_ctxmenu
+               lt_buttons.
+
+    call method g_appl_type_prop-instance->get_toolbar_menus_and_buttons
+      exporting
+        i_fmode    = fmode
+      importing
+        et_buttons = lt_buttons_appl_type
+        et_ctxmenu = lt_ctxmenu_appl_type.
+
+    append lines of lt_buttons_appl_type to lt_buttons.
+    append lines of lt_ctxmenu_appl_type to lt_ctxmenu.
+
+    call method gr_toolbar->add_button_group
+      exporting
+        data_table = lt_buttons.
+
+    call method gr_toolbar->assign_static_ctxmenu_table
+      exporting
+        table_ctxmenu = lt_ctxmenu.
+  endif.
+endform.                    " SET_TOOLBAR
+*&---------------------------------------------------------------------*
+*&      Form  free_toolbar
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+form free_toolbar.
+  if not gr_container_toolbar is initial.
+    call method gr_container_toolbar->free( ).
+  endif.
+  if not gr_event_receiver is initial.
+    gr_event_receiver->set_handler( abap_false ).
+  endif.
+  if not gr_event_receiver_app is initial.
+    gr_event_receiver_app->set_handler( abap_false ).
+  endif.
+  free:
+    gr_container_toolbar,
+    gr_toolbar,
+    gr_event_receiver,
+    gr_event_receiver_app,
+    g_appl_type_prop,
+    g_appl_type_prop_tab.
+endform.                    "free_toolbar
+
+*&---------------------------------------------------------------------*
+*&      Form  init_appl_types
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+form set_appl_type.
+  data:
+    l_badi type ref to wdy_pfcg_application_type_hdr.
+
+  if g_appl_type_prop_tab is initial.
+    get badi l_badi.
+    call badi l_badi->get_application_types
+      changing
+        application_types = g_appl_type_prop_tab.
+    assert gr_event_receiver_app is initial.
+    create object gr_event_receiver_app.
+  endif.
+
+  if not g_appl_type_prop-instance is initial.
+    gr_event_receiver_app->set_handler( abap_false ).
+  endif.
+
+  read table g_appl_type_prop_tab into g_appl_type_prop
+    with table key application_name components application = wdy_name.
+  if sy-subrc <> 0.
+    read table g_appl_type_prop_tab into g_appl_type_prop
+    with table key application_type components application_type = cl_wdy_pfcg_appl_type_standard=>co_application_type.
+  endif.
+  if not g_appl_type_prop-instance is initial.
+    gr_event_receiver_app->set_handler( abap_true ).
+  endif.
+endform.                    "init_appl_types
+*&---------------------------------------------------------------------*
+*&      Form  GET_APPLICATION_MENU
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+form get_application_menu  changing ct_ctxmenu type ttb_btnmnu
+                                    ct_buttons type ttb_button.
+  data:
+      lr_menu type ref to cl_ctmenu,
+      ls_ctxmenu type line of ttb_btnmnu,
+      ls_button type line of ttb_button.
+
+  field-symbols:
+    <l_appl_type_prop> like line of g_appl_type_prop_tab.
+
+  ls_button-function = 'TB_MENU_APPL'.
+*  ls_button-icon = icon_tree.
+  clear ls_button-icon.
+  read table g_appl_type_prop_tab  assigning <l_appl_type_prop>
+    with table key application_name components application = wdy_name.
+  if sy-subrc <> 0.
+    read table g_appl_type_prop_tab  assigning <l_appl_type_prop>
+    with table key application_type components application_type = cl_wdy_pfcg_appl_type_standard=>co_application_type.
+  endif.
+  ls_button-text = <l_appl_type_prop>-display_name.
+  ls_button-quickinfo = 'Liste mit Anwendungstypen'(011).
+  ls_button-butn_type = cntb_btype_dropdown.
+
+  if fmode = c_display_mode.
+    ls_button-disabled = abap_true.
+  else.
+    ls_button-disabled = abap_false.
+  endif.
+
+  append ls_button to ct_buttons.
+
+  clear ls_button.
+  ls_button-butn_type = cntb_btype_sep.
+  append ls_button to ct_buttons.
+
+  create object lr_menu.
+
+  loop at g_appl_type_prop_tab assigning <l_appl_type_prop>.
+    call method lr_menu->add_function
+      exporting
+        fcode = |TB_APPL_{ <l_appl_type_prop>-application_type }|
+        text  = <l_appl_type_prop>-display_name.
+  endloop.
+
+  ls_ctxmenu-function = 'TB_MENU_APPL'.
+  ls_ctxmenu-ctmenu = lr_menu.
+  append ls_ctxmenu to ct_ctxmenu.
+
+endform.                    " GET_APPLICATION_MENU
+*&---------------------------------------------------------------------*
+*&      Form  GET_TEST_MENU
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+form get_test_menu  changing ct_ctxmenu type ttb_btnmnu
+                                    ct_buttons type ttb_button.
+  data:
+      lr_menu type ref to cl_ctmenu,
+      ls_ctxmenu type line of ttb_btnmnu,
+      ls_button type line of ttb_button,
+      l_text40 type gui_text.
+
+  field-symbols:
+    <l_appl_type_prop> like line of g_appl_type_prop_tab.
+
+* set default mode to personalization
+  g_toolbar_test_mode = ''.
+  ls_button-text = 'Personalisierung'(012).
+
+  ls_button-function = 'TB_MENU_TEST'.
+  ls_button-icon = icon_test.
+  ls_button-quickinfo = 'Ausführen'(006).
+  ls_button-butn_type = cntb_btype_dropdown.
+  append ls_button to ct_buttons.
+
+
+  create object lr_menu.
+
+  l_text40 = 'Personalisierung'(012).
+  call method lr_menu->add_function
+    exporting
+      fcode = 'TB_TEST_'
+      text  = l_text40.
+
+  l_text40 = 'Customizing'(016).
+  call method lr_menu->add_function
+    exporting
+      fcode = 'TB_TEST_X'
+      text  = l_text40.
+
+  l_text40 =  'Konfiguration'(017).
+  call method lr_menu->add_function
+    exporting
+      fcode = 'TB_TEST_CONFIG'
+      text  = l_text40.
+
+  ls_ctxmenu-function = 'TB_MENU_TEST'.
+  ls_ctxmenu-ctmenu = lr_menu.
+  append ls_ctxmenu to ct_ctxmenu.
+
+endform.                    " GET_TEST_MENU
+
+*&---------------------------------------------------------------------*
+*&      Form  change_appl_type
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+form change_appl_type using appl_type type string.
+  data:
+     l_answer type c length 1,
+     l_application type wdy_application_name.
+
+  field-symbols:
+    <l_appl_type_prop> like line of g_appl_type_prop_tab.
+
+  read table g_appl_type_prop_tab  assigning <l_appl_type_prop>
+    with table key application_type components application_type = appl_type.
+
+  check g_appl_type_prop-application_type ne <l_appl_type_prop>-application_type.
+
+  if not wdy_name is initial.
+    call function 'POPUP_TO_CONFIRM'
+      exporting
+        titlebar       = 'Anwendungstyp ändern'(018)
+        text_question  = 'Alle Einstellungen gehen verloren. Möchten Sie den Typ der Anwendung ändern?'(015)
+        default_button = '2'
+      importing
+        answer         = l_answer.
+
+    check l_answer = '1'.
+  endif.
+
+  l_application = <l_appl_type_prop>-application.
+  perform clear_all.
+  fmode = c_create_mode.
+  wdy_name = l_application.
+
+endform.                    "change_appl_type
+*&---------------------------------------------------------------------*
+*&      Form  SET_TOOLBAR_TEST_MODE
+*&---------------------------------------------------------------------*
+form set_toolbar_test_mode  using test_mode.
+  data:
+     l_text type text40.
+
+  g_toolbar_test_mode = test_mode.
+
+  case test_mode.
+    when ''.
+      l_text = 'Personalisierung'(012).
+    when 'X'.
+      l_text = 'Customizing'(016).
+    when 'CONFIG'.
+      l_text = 'Konfiguration'(017).
+    when others.
+      assert 1 = 2.
+  endcase.
+  call method gr_toolbar->set_button_info
+    exporting
+      fcode     = 'TB_MENU_TEST'
+      icon      = '@12@' "icon_test
+      text      = l_text
+      quickinfo = 'Ausführen'(006)
+    exceptions
+      others    = 3.
+  if sy-subrc <> 0.
+    message id sy-msgid type 'E' number sy-msgno
+               with sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+  endif.
+endform.                    " SET_TOOLBAR_TEST_MODE

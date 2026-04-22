@@ -1,0 +1,513 @@
+*----------------------------------------------------------------------
+***INCLUDE LWDY_PRGN_NODESF01 .
+*----------------------------------------------------------------------
+*&---------------------------------------------------------------------*
+*&      Form  clear_all
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+form clear_all .
+  clear: wdy_name,
+         wdy_text,
+         wdy_config,
+         wdy_url,
+         pr_https,
+         param_lin,
+         i_param[],
+         param_cntrl-top_line.
+
+  rb_ext = 'X'.
+  rb_browser = 'X'.
+  clear: rb_int,
+         rb_smcl,
+         rb_auto.
+
+  perform free_toolbar.
+
+endform.                    " clear_all
+
+*&---------------------------------------------------------------------*
+*&      Form  check_wdy
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+form check_wdy.
+  data: exist_flag.
+  call method ('CL_WDY_MD_APPLICATION')=>('CHECK_EXISTENCY')
+    exporting
+      name     = wdy_name
+    receiving
+      existent = exist_flag.
+
+  if exist_flag ne 'X'.
+*    message w088(st) with text-001. "702SP10
+    clear ok_code.
+    message e088(st) with text-001. "702SP10
+  endif.
+
+endform.                    " check_wdy
+
+*&---------------------------------------------------------------------*
+*&      Form  prepare_fieldtab_for_param
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+form prepare_fieldtab_for_param.
+  data: max type i,
+        cur type i.
+  loop at avail_prop_tab into avail_prop_lin.
+    cur = strlen( avail_prop_lin-name ) +
+          strlen( avail_prop_lin-description ) +
+          strlen( avail_prop_lin-value ).
+    if cur > max.  max = cur. endif.
+  endloop.
+  clear: field_lin, field_tab.
+  call function 'DDIF_FIELDINFO_GET'
+    exporting
+      tabname    = 'WDY_PARAM_F4_INFO'
+      lfieldname = 'NAME'
+    importing
+      dfies_wa   = field_lin.
+  append field_lin to field_tab.
+  if max le 100.
+    call function 'DDIF_FIELDINFO_GET'
+      exporting
+        tabname    = 'WDY_PARAM_F4_INFO'
+        lfieldname = 'DESCRIPTION'
+      importing
+        dfies_wa   = field_lin.
+    append field_lin to field_tab.
+  endif.
+  call function 'DDIF_FIELDINFO_GET'
+    exporting
+      tabname    = 'WDY_PARAM_F4_INFO'
+      lfieldname = 'VALUE'
+    importing
+      dfies_wa   = field_lin.
+  append field_lin to field_tab.
+endform.                    " prepare_fieldtab_for_param
+
+*&---------------------------------------------------------------------*
+*&      Form  name_f4_key
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+form name_f4_key .
+  data: dynpfields type table of dynpread with header line,
+        dyname      like sy-repid,
+        dynumb      like sy-dynnr,
+        name_selected type string,
+        applobj     type ref to object,
+        suppress_flag type c.
+
+  clear: dynpfields, dynpfields[].
+  dynpfields-fieldname = 'WDY_NAME'. append dynpfields.
+  dyname = sy-repid.
+  dynumb = sy-dynnr.
+  call function 'DYNP_VALUES_READ'
+    exporting
+      dyname             = dyname
+      dynumb             = dynumb
+      translate_to_upper = 'X'
+    tables
+      dynpfields         = dynpfields
+    exceptions
+      others             = 1.
+  check sy-subrc = 0.
+
+  read table dynpfields with key fieldname = 'WDY_NAME'.
+
+  if dynpfields-fieldvalue is not initial.
+    suppress_flag = 'X'.
+  endif.
+  call function 'REPOSITORY_INFO_SYSTEM_F4'
+    exporting
+      object_name           = dynpfields-fieldvalue
+      object_type           = 'YY'
+      without_personal_list = 'X'
+      suppress_selection    = suppress_flag
+    importing
+      object_name_selected  = name_selected
+    exceptions
+      cancel                = 01
+      wrong_type            = 02.
+  if sy-subrc ne 0.
+    wdy_name = dynpfields-fieldvalue.
+    call function 'DYNP_VALUES_UPDATE'
+      exporting
+        dyname     = dyname
+        dynumb     = dynumb
+      tables
+        dynpfields = dynpfields
+      exceptions
+        others     = 1.
+    check sy-subrc = 0.
+    exit.
+  else.
+    wdy_name = name_selected.
+    dynpfields-fieldvalue = name_selected.
+    modify dynpfields index 1.
+  endif.
+
+  try.
+      call method ('CL_WDY_MD_APPLICATION')=>('GET_OBJECT_BY_KEY')
+        exporting
+          name        = wdy_name
+        receiving
+          application = applobj.
+    catch cx_wdy_md_not_existing.
+      return.
+    catch cx_wdy_md_permission_failure.
+      return.
+  endtry.
+
+  call method applobj->('IF_WDY_MD_OBJECT~GET_DESCRIPTION')
+    receiving
+      description = wdy_text.
+  dynpfields-fieldname  = 'WDY_TEXT'.
+  dynpfields-fieldvalue = wdy_text.
+  append dynpfields.
+
+  call function 'DYNP_VALUES_UPDATE'
+    exporting
+      dyname     = dyname
+      dynumb     = dynumb
+    tables
+      dynpfields = dynpfields
+    exceptions
+      others     = 1.
+  check sy-subrc = 0.
+
+endform.                    " name_f4_key
+
+*&---------------------------------------------------------------------*
+*&      Form  config_f4_key
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+form config_f4_key .
+* ======== build F4-table =============
+  types: begin of lty_f4,
+           config_id type wdy_config_id,
+           description type wdy_md_description,
+         end of lty_f4.
+
+  data: dynpfields type table of dynpread with header line,
+        dyname      like sy-repid,
+        dynumb      like sy-dynnr,
+        name_selected type string,
+        applobj     type ref to object,
+        suppress_flag type c,
+        lt_configs type wdy_config_hi_table,
+        ls_f4 type lty_f4,
+        lt_f4 type standard table of lty_f4,
+        l_return_tab like ddshretval occurs 0 with header line,
+        l_value type dynfieldvalue,
+        l_display type c length 1.
+
+  field-symbols:
+        <ls_config> like line of lt_configs.
+
+  clear: dynpfields, dynpfields[].
+  dynpfields-fieldname = 'WDY_NAME'. append dynpfields.
+  dynpfields-fieldname = 'WDY_CONFIG'. append dynpfields.
+  dyname = sy-repid.
+  dynumb = sy-dynnr.
+  call function 'DYNP_VALUES_READ'
+    exporting
+      dyname             = dyname
+      dynumb             = dynumb
+      translate_to_upper = 'X'
+    tables
+      dynpfields         = dynpfields
+    exceptions
+      others             = 1.
+  check sy-subrc = 0.
+
+  read table dynpfields with key fieldname = 'WDY_NAME'.
+  wdy_name = dynpfields-fieldvalue.
+
+  read table dynpfields with key fieldname = 'WDY_CONFIG'.
+  wdy_config = dynpfields-fieldvalue.
+  l_value = wdy_config.
+
+  lt_configs = cl_wdr_configuration_utils=>get_config_list_4_appl(
+      application_name = wdy_name ).
+
+  loop at lt_configs assigning <ls_config>.
+    ls_f4-config_id = <ls_config>-config_id.
+    ls_f4-description = <ls_config>-description.
+    append ls_f4 to lt_f4.
+  endloop.
+* call F4
+  if fmode = 'D'.
+    l_display = 'X'.
+  else.
+    l_display = ' '.
+  endif.
+  call function 'F4IF_INT_TABLE_VALUE_REQUEST'
+    exporting
+      retfield        = 'CONFIG_ID'
+      value           = l_value
+      value_org       = 'S'
+      display         = l_display
+    tables
+      value_tab       = lt_f4
+      return_tab      = l_return_tab
+    exceptions
+      parameter_error = 1
+      no_values_found = 2.
+
+  if sy-subrc = 2.
+    message s001.
+    return.
+  endif.
+
+  read table l_return_tab index 1.
+  wdy_config = l_return_tab-fieldval.
+  return.
+endform.                    " name_f4_key
+
+*&---------------------------------------------------------------------*
+*&      Form  param_f4_key
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+form param_f4_key .
+  data: stepl      type i,
+        return_tab type table of ddshretval with header line,
+        dynnr      type sy-dynnr,
+        dynpfields type table of dynpread with header line,
+        dyname      like sy-repid.
+
+  clear: dynpfields, dynpfields[].
+  dynpfields-fieldname = 'WDY_NAME'. append dynpfields.
+  dyname = sy-repid.
+  dynnr = sy-dynnr.
+  call function 'DYNP_VALUES_READ'
+    exporting
+      dyname             = dyname
+      dynumb             = dynnr
+      translate_to_upper = 'X'
+    tables
+      dynpfields         = dynpfields
+    exceptions
+      others             = 1.
+  check sy-subrc = 0.
+
+  read table dynpfields with key fieldname = 'WDY_NAME'.
+  wdy_name = dynpfields-fieldvalue.
+
+  perform update_parameter.
+
+  call function 'DYNP_GET_STEPL'
+    importing
+      povstepl = stepl
+    exceptions
+      others   = 0.
+
+  perform prepare_fieldtab_for_param.
+  call function 'F4IF_INT_TABLE_VALUE_REQUEST'
+    exporting
+      retfield        = 'NAME'
+      dynpprog        = dyname
+      dynpnr          = dynnr
+      dynprofield     = 'PARAM_LIN-NAME'
+      stepl           = stepl
+      window_title    = text-002
+      value_org       = 'S'
+      display         = ' '
+    tables
+      value_tab       = avail_prop_tab
+      return_tab      = return_tab
+      field_tab       = field_tab
+    exceptions
+      parameter_error = 1
+      no_values_found = 2
+      others          = 3.
+  check sy-subrc = 0.
+
+  if return_tab is initial.
+    clear param_lin-name.
+  endif.
+
+  read table avail_prop_tab into avail_prop_lin with key
+    name = return_tab-fieldval.
+  if sy-subrc eq 0.
+    clear: dynpfields, dynpfields[].
+    dynpfields-fieldname  = 'PARAM_LIN-NAME'.
+    dynpfields-fieldvalue = avail_prop_lin-name.
+    dynpfields-stepl      = stepl.
+    append dynpfields.
+    dynpfields-fieldname  = 'PARAM_LIN-VALUE'.
+    dynpfields-fieldvalue = avail_prop_lin-value.
+    dynpfields-stepl      = stepl.
+    append dynpfields.
+  endif.
+
+  call function 'DYNP_VALUES_UPDATE'
+    exporting
+      dyname     = dyname
+      dynumb     = dynnr
+    tables
+      dynpfields = dynpfields
+    exceptions
+      others     = 0.
+
+endform.                    " param_f4_key
+
+*&---------------------------------------------------------------------*
+*&      Form  check_param
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+form check_param  using    l_param_lin type ihttpnvp
+                  changing l_new_entry   type c.
+
+  data: tot_lines type i.
+
+  describe table i_param lines tot_lines.
+  if param_cntrl-current_line > tot_lines.
+    l_new_entry = 'X'.
+  else.
+    l_new_entry = space.
+  endif.
+  if l_new_entry = 'X'.
+    read table i_param with key name = l_param_lin-name
+      transporting no fields.
+    if sy-subrc eq 0.
+      clear ok_code.
+      message e088(st) with text-005.
+    endif.
+  endif.
+endform.                    " check_param
+
+*&---------------------------------------------------------------------*
+*&      Form  update_parameter
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+form update_parameter.
+  data:
+    l_plug type ref to if_wdy_md_inbound_plug,
+    l_keys type string_table,
+    ls_prop like line of prop_tab.
+  clear: predef_prop_tab, prop_tab.
+  call method ('CL_WDY_MD_APPLICATION_PROPERTY')=>('GET_APPLICATION_PROPERTY_DEFS')
+    receiving
+      p_property_tab = predef_prop_tab.
+  call method cl_wdy_md_application=>get_properties_static
+    exporting
+      p_application    = wdy_name
+    receiving
+      p_property_table = prop_tab.
+
+* get parameter of startup plug
+  try.
+      l_plug = cl_wdy_md_application=>get_object_by_key( name = wdy_name suppress_access_permission = abap_true )->get_startup_plug( ).
+      l_keys = l_plug->get_parameters( )->get_keys( ).
+      loop at l_keys into ls_prop-name.
+        ls_prop-application_name = wdy_name.
+        append ls_prop to prop_tab.
+      endloop.
+    catch cx_static_check.
+  endtry.
+
+  clear param_lin.
+
+* Fill the internal table with actual parameter values
+  clear: avail_prop_tab, prop_lin, avail_prop_lin.
+  loop at prop_tab into prop_lin.
+    move-corresponding prop_lin to avail_prop_lin.          "#EC ENHOK
+    append avail_prop_lin to avail_prop_tab.
+  endloop.
+  clear avail_prop_lin.
+  loop at predef_prop_tab into predef_prop_lin.
+    " special for application configuration
+    check predef_prop_lin-property_name ne c_config_param_1.
+    read table prop_tab with key name = predef_prop_lin-property_name
+       transporting no fields.
+    if sy-subrc ne 0.
+      avail_prop_lin-name = predef_prop_lin-property_name.
+      avail_prop_lin-value = predef_prop_lin-default_value.
+      avail_prop_lin-description = predef_prop_lin-description.
+      append avail_prop_lin to avail_prop_tab.
+    endif.
+  endloop.
+
+endform.                    " update_parameter
+
+*&---------------------------------------------------------------------*
+*&      Form  review_parameters
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+form review_parameters.
+  data client type symandt.
+
+  delete i_param where name = space.  "FH 2011-05-05
+*  delete i_param where value = space.  "FH 2011-05-05
+
+  call 'C_SAPGPARAM' id 'NAME'  field 'login/system_client'
+                     id 'VALUE' field client.             "#EC CI_CCALL
+  if client <> sy-mandt.
+    param_lin-name  = 'sap-client'.                         "#EC NOTEXT
+    param_lin-value = sy-mandt.
+    append param_lin to i_param.
+  endif.
+  param_lin-name  = 'sap-language'.                         "#EC NOTEXT
+  read table i_param with key name = param_lin-name
+        transporting no fields.
+  if sy-subrc eq 4.
+    CALL FUNCTION 'CONVERSION_EXIT_ISOLA_OUTPUT'
+    exporting
+      input  = sy-langu
+    importing
+      output = param_lin-value.
+  append param_lin to i_param.
+  endif.
+endform.                    " review_parameters
+
+*&---------------------------------------------------------------------*
+*&      Form  attr_loop_line
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+form attr_loop_line .
+  if not param_lin-name is initial.
+    loop at screen.
+      if screen-group3 = '01'.
+        clear screen-input.
+        modify screen.
+      endif.
+      if screen-group4 = 'APT'.
+        call method g_appl_type_prop-instance->change_screen_attributes
+          exporting
+            name     = screen-name
+          changing
+            active   = screen-active
+            input    = screen-input
+            required = screen-required.
+        modify screen.
+      endif.
+    endloop.
+  endif.
+endform.                    " attr_loop_line

@@ -1,0 +1,64 @@
+*----------------------------------------------------------------------
+***INCLUDE LWDY_PRGN_NODESF04 .
+*----------------------------------------------------------------------
+*&---------------------------------------------------------------------*
+*&      Form  fill_url_400
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM fill_url_400.
+  DATA: s_application TYPE wdy_application_name,
+        protocol TYPE string,
+        parameter TYPE ihttpnvp,
+        parameters TYPE tihttpnvp,
+        l_im TYPE c.
+
+  IF https IS NOT INITIAL.
+    protocol = c_https_name.
+  ELSE.
+    CLEAR protocol. " Choose protocol automatically
+  ENDIF.
+
+  s_application = application.
+  IF wdconfigurationid IS NOT INITIAL.
+    parameter-name = 'WDCONFIGURATIONID'.
+    parameter-value = wdconfigurationid.
+*    parameter-value = cl_wdr_escape=>escape_url(
+*      val     = parameter-value
+*      format  = cl_abap_format=>e_xss_url
+**      options =
+*    ).
+    APPEND parameter TO parameters.
+  ENDIF.
+
+  IF startmode NE c_browser.
+    l_im = abap_true.
+  ELSE.
+    l_im = abap_false.
+  ENDIF.
+
+  CALL FUNCTION 'WDY_EXECUTE_IN_PLACE'
+    EXPORTING
+      protocol     = protocol
+      internalmode = l_im
+      application  = s_application
+      parameters   = parameters
+    IMPORTING
+      out_url      = gen_url
+    EXCEPTIONS
+      INVALID_APPLICATION    = 1
+      BROWSER_NOT_STARTED    = 2
+      OTHERS                 = 3.
+  IF sy-subrc EQ 1.
+    MESSAGE a400.
+  ELSEIF sy-subrc = 2.
+    MESSAGE a401.
+  ELSEIF sy-subrc = 3.
+    MESSAGE a667.
+  ENDIF.
+
+  LEAVE TO SCREEN 0.
+ENDFORM.                    " fill_url_400

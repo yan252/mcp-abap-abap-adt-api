@@ -1,0 +1,276 @@
+*----------------------------------------------------------------------
+***INCLUDE LWDY_PRGN_NODESF02 .
+*----------------------------------------------------------------------
+*&---------------------------------------------------------------------*
+*&      Form  initialize_viewer
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+FORM initialize_viewer USING container_name TYPE scrfname.
+  DATA: sys_par_val(100) TYPE c.
+  IF container_name IS INITIAL.
+    CREATE OBJECT wdp_html_container
+      EXPORTING
+        container_name = 'HTML'.
+  ELSE.
+    CREATE OBJECT wdp_html_container
+      EXPORTING
+        container_name = container_name.
+  ENDIF.
+  CREATE OBJECT wdr_html_viewer
+    EXPORTING
+      parent      = wdp_html_container.
+
+   IF fscr_mode = abap_true.
+*     CALL METHOD wdr_html_viewer->use_standard_exit
+*       EXPORTING
+*         flag = 'X'.
+     CREATE OBJECT wdr_inplace_handler.
+     set handler wdr_inplace_handler->on_wd_event
+              FOR wdr_html_viewer.
+   ENDIF.
+
+  CALL 'C_SAPGPARAM'                                      "#EC CI_CCALL
+    ID 'NAME'  FIELD 'login/create_sso2_ticket'
+    ID 'VALUE' FIELD sys_par_val.
+  IF sys_par_val < 0. " see SAP note 1562004
+    MESSAGE s530(swdp_wb_tool).
+  ENDIF.
+  CALL 'C_SAPGPARAM'                                      "#EC CI_CCALL
+    ID 'NAME'  FIELD 'login/accept_sso2_ticket'
+    ID 'VALUE' FIELD sys_par_val.
+  IF sys_par_val NE 1.
+    MESSAGE s530(swdp_wb_tool).
+  ENDIF.
+
+  DATA: icf_node TYPE string VALUE '/sap/public/myssocntl',
+        icf_state TYPE icfactive VALUE 'X'.
+
+  CALL METHOD cl_icf_tree=>if_icf_tree~service_from_url
+    EXPORTING
+      url             = icf_node
+      hostnumber      = 0
+      authority_check = space
+    IMPORTING
+      icfactive       = icf_state.
+
+  IF sy-subrc IS NOT INITIAL OR icf_state IS INITIAL.
+    MESSAGE s531(swdp_wb_tool).
+  ENDIF.
+
+  DATA: temp_str TYPE string,                               "#EC NEEDED
+        host TYPE string,
+        host_parts TYPE string_table,
+        host_part TYPE string,
+        i TYPE i.
+  SPLIT gen_url AT '://' INTO temp_str host.
+  SPLIT host AT ':' INTO host temp_str.
+  TRANSLATE host TO LOWER CASE.
+  SPLIT host AT '.' INTO TABLE host_parts.
+  i = LINES( host_parts ).
+  IF i > 0.
+    READ TABLE host_parts INTO host_part INDEX i.
+    CASE host_part.
+      WHEN 'com' OR
+           'edu' OR
+           'net' OR
+           'org' OR
+           'gov' OR
+           'mil' OR
+           'int'.
+        IF LINES( host_parts ) < 2.
+          MESSAGE s532(swdp_wb_tool).
+        ENDIF.
+      WHEN OTHERS.
+        IF LINES( host_parts ) < 3.
+          MESSAGE s532(swdp_wb_tool).
+        ENDIF.
+    ENDCASE.
+  ENDIF.
+
+ENDFORM.                    " initialize_viewer
+
+*&---------------------------------------------------------------------*
+*&      Form  show_url_in_viewer
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*      -->P_GEN_URL  text
+*----------------------------------------------------------------------*
+FORM show_url_in_viewer  USING p_url.
+  DATA:  url_to_show(100000) TYPE c.
+  url_to_show = p_url.
+  wdr_html_viewer->show_url( url = url_to_show ).
+  cl_gui_cfw=>flush( ).
+ENDFORM.                    " show_url_in_viewer
+
+*&---------------------------------------------------------------------*
+*&      Form  register_smartclient_event
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM register_smartclient_event.
+  DATA: event_tab TYPE cntl_simple_events,
+        p_event TYPE cntl_simple_event.
+
+  p_event-eventid = 3. "cl_gui_webdynpro_viewer=>eventid_control_info.
+  p_event-appl_event = 'x'.
+  APPEND p_event TO event_tab.
+  CALL METHOD wdp_smartclient_viewer->set_registered_events
+    EXPORTING
+      events = event_tab.
+
+ENDFORM.                    " register_smartclient_event
+
+
+*&---------------------------------------------------------------------*
+*&      Form  leave_wdr_html_viewer
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+FORM leave_wdr_html_viewer.
+
+  wdr_html_viewer->close_document( ).
+  cl_gui_cfw=>flush( ).
+  WAIT UP TO 1 SECONDS.
+
+  wdr_html_viewer->free( ).
+  CLEAR wdr_html_viewer.
+
+  wdp_html_container->free( ).
+  CLEAR wdp_html_container.
+ENDFORM.                    " leave_wdr_html_viewer
+
+*&---------------------------------------------------------------------*
+*&      Form  initialize_smartclient_viewer
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*      -->P_SPACE  text
+*----------------------------------------------------------------------*
+FORM initialize_smartclient_viewer USING container_name TYPE scrfname..
+  IF wdp_smartclient_viewer IS INITIAL.
+    IF container_name IS INITIAL.
+      CREATE OBJECT wdp_html_container
+        EXPORTING
+          container_name = 'HTML'.
+    ELSE.
+      CREATE OBJECT wdp_html_container
+        EXPORTING
+          container_name = container_name.
+    ENDIF.
+    CREATE OBJECT wdp_smartclient_viewer
+      EXPORTING
+        parent = wdp_html_container.
+    cl_gui_cfw=>update_view(
+      EXCEPTIONS
+        cntl_system_error = 1
+        cntl_error        = 2
+        OTHERS            = 3 ).
+  ENDIF.
+
+  IF sy-subrc = 0.
+    PERFORM register_smartclient_event.
+    wdp_smartclient_viewer->navigate( gen_url ).
+  ELSE.
+    MESSAGE e088(st) WITH text-009.
+  ENDIF.
+ENDFORM.                    " initialize_smartclient_viewer
+
+*&---------------------------------------------------------------------*
+*&      Form  leave_wdr_html_viewer
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+FORM leave_wdr_smartclient_viewer.
+
+*  wdp_smartclient_viewer->close_document( ).
+*  cl_gui_cfw=>flush( ).
+*  WAIT UP TO 1 SECONDS.
+
+  wdp_smartclient_viewer->free( ).
+  CLEAR wdp_smartclient_viewer.
+
+  wdp_html_container->free( ).
+  CLEAR wdp_html_container.
+ENDFORM.                    " leave_wdr_html_viewer
+
+*&---------------------------------------------------------------------*
+*&      Form  get_wda_text
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM get_wda_text .
+  DATA: applobj TYPE REF TO object.
+  CLEAR gen_text.
+  TRY.
+      CALL METHOD ('CL_WDY_MD_APPLICATION')=>('GET_OBJECT_BY_KEY')
+        EXPORTING
+          name                       = wdy_name
+          suppress_access_permission = 'X'
+        RECEIVING
+          application                = applobj.
+
+      CALL METHOD applobj->('IF_WDY_MD_OBJECT~GET_DESCRIPTION')
+        RECEIVING
+          description = gen_text.
+    CATCH cx_wdy_md_not_existing.
+      MESSAGE e088(st) WITH text-001.
+    CATCH cx_wdy_md_permission_failure.
+      MESSAGE e088(st) WITH text-001.
+  ENDTRY.
+ENDFORM.                    " get_wda_text
+
+*&---------------------------------------------------------------------*
+*&      Form  get_wda_text_new
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*      -->E_TEXT     text
+*----------------------------------------------------------------------*
+form get_wda_text_new changing e_text type bxmnodes-text.
+  types: begin of s_buffer,
+    wdy_name type wdy_application_name,
+    config_id type wdy_config_id,
+    text type bxmnodes-text,
+    end of s_buffer.
+  statics lth_buffer type hashed table of s_buffer with unique key wdy_name config_id.
+
+  data l_text type wdy_md_description.
+  data ls_buffer type s_buffer.
+  data l_wdy_name type wdy_application_name.
+  data l_config type wdy_config_id.
+
+  l_wdy_name = wdy_name.
+  TRANSLATE l_wdy_name TO UPPER CASE.
+
+  l_config = wdy_config.
+  TRANSLATE l_config to UPPER CASE.
+
+  read table lth_buffer into ls_buffer with table key wdy_name = l_wdy_name config_id = l_config.
+  if sy-subrc <> 0.
+    ls_buffer-wdy_name = l_wdy_name.
+    ls_buffer-config_id = l_config.
+
+    if wdy_config is initial.
+      select single description from wdy_applicationt into ls_buffer-text
+        where langu = sy-langu
+        and   application_name = l_wdy_name.
+    else.
+      select single description from wdy_config_appt into ls_buffer-text
+        where langu = sy-langu
+        and   config_id = l_config
+        and   config_type = if_wd_config_constants=>c_config_type_appl
+        and   config_var = ''.
+    endif.
+    insert ls_buffer into table lth_buffer.
+  endif.
+
+  e_text = ls_buffer-text.
+endform.                    "get_wda_text_new

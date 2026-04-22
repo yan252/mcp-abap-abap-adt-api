@@ -1,0 +1,391 @@
+*----------------------------------------------------------------------*
+*       CLASS lcl_Unit_Tests_Url DEFINITION
+*----------------------------------------------------------------------*
+*
+*----------------------------------------------------------------------*
+class lcl_unit_tests_url definition for testing
+  duration short
+  risk level harmless
+.
+*?<asx:abap xmlns:asx=\"http://www.sap.com/abapxml\" version=\"1.0\">
+*?<asx:values>
+*?<TESTCLASS_OPTIONS>
+*?<TEST_CLASS>lcl_Unit_Tests_Url
+*?</TEST_CLASS>
+*?<TEST_MEMBER>-no-
+*?</TEST_MEMBER>
+*?<OBJECT_UNDER_TEST/>
+*?<OBJECT_IS_LOCAL/>
+*?<GENERATE_FIXTURE/>
+*?<GENERATE_CLASS_FIXTURE/>
+*?<GENERATE_INVOCATION/>
+*?<GENERATE_ASSERT_EQUAL/>
+*?</TESTCLASS_OPTIONS>
+*?</asx:values>
+*?</asx:abap>
+  public section.
+    class-methods class_constructor.
+
+  private section.
+* ================
+    methods: prgn_wdy_execute_url for testing.
+    methods: wdy_execute_in_browser for testing.
+    methods: simulate_change for testing.
+    methods: parse_agr_url for testing.
+    methods: fill_node for testing.
+    methods: wdy_parse_agr_url for testing.
+
+    constants:
+      co_application type wdy_application_name value 'WDR_CHIP_PAGE',
+      co_param type string value 'PARAM',
+      co_config type string value 'WDCONFIGURATIONID',
+      co_config2 type string value 'SAP-WD-CONFIGID',
+      co_value type string value 'X',
+      co_value_special type string value '/X%Y',
+      co_value_empty type string value '',
+    co_value_special_esc type string value '%2fX%25Y'.
+
+    types:
+      begin of s_test,
+        value_param type string,
+        value_param_change type string,
+        value_config type string,
+        url type string,
+        url2 type string,
+        url3 type string,
+      end of s_test.
+
+    class-data:
+      mt_tests type standard table of s_test.
+endclass.       "lcl_Unit_Tests_Url
+
+
+*----------------------------------------------------------------------*
+*       CLASS lcl_Unit_Tests_Url IMPLEMENTATION
+*----------------------------------------------------------------------*
+*
+*----------------------------------------------------------------------*
+class lcl_unit_tests_url implementation.
+* ========================================
+  method class_constructor.
+    data:
+      ls_test type s_test,
+      l_langu type c length 2,
+      l_sys_client type symandt,
+      l_client_string type string.
+
+    write sy-langu to l_langu.
+
+    "check system client = actual client
+    call 'C_SAPGPARAM' id 'NAME'  field 'login/system_client'
+                    id 'VALUE' field l_sys_client.        "#EC CI_CCALL
+    if l_sys_client <> sy-mandt.
+      l_client_string = |&sap-client={ sy-mandt }|.
+    else.
+      clear l_client_string.
+    endif.
+
+    " no special characters
+    clear ls_test.
+    ls_test-value_param = co_value.
+    ls_test-value_param_change = |{ ls_test-value_param }2|.
+    ls_test-value_config = co_value.
+    ls_test-url  = |{ co_param }={ co_value }{ l_client_string }&sap-language={ l_langu }&{ co_config }={ co_value }|.
+    ls_test-url2 = |{ co_param }={ co_value }&{ co_config }={ co_value }{ l_client_string }&sap-language={ l_langu }|.
+    ls_test-url3  = |{ co_param }={ ls_test-value_param_change }{ l_client_string }&sap-language={ l_langu }&{ co_config }={ co_value }2|.
+    append ls_test to mt_tests.
+
+    " PARAM: special character; CONFIG: no special character
+    clear ls_test.
+    ls_test-value_param = co_value_special_esc.
+    ls_test-value_param_change = |{ co_value_special }2|.
+    ls_test-value_config = co_value.
+    ls_test-url = |{ co_param }={ co_value_special_esc }{ l_client_string }&sap-language={ l_langu }&{ co_config }={ co_value }|.
+    ls_test-url2 = |{ co_param }={ co_value_special_esc }&{ co_config }={ co_value }{ l_client_string }&sap-language={ l_langu }|.
+    ls_test-url3 = |{ co_param }={ co_value_special_esc }2{ l_client_string }&sap-language={ l_langu }&{ co_config }={ co_value }2|.
+    append ls_test to mt_tests.
+
+    " PARAM: no special character; CONFIG: special character
+    clear ls_test.
+    ls_test-value_param = co_value.
+    ls_test-value_param_change = |{ ls_test-value_param }2|.
+    ls_test-value_config = co_value_special_esc.
+    ls_test-url = |{ co_param }={ co_value }{ l_client_string }&sap-language={ l_langu }&{ co_config }={ co_value_special_esc }|.
+    ls_test-url2 = |{ co_param }={ co_value }&{ co_config }={ co_value_special_esc }{ l_client_string }&sap-language={ l_langu }|.
+    ls_test-url3 = |{ co_param }={ ls_test-value_param_change }{ l_client_string }&sap-language={ l_langu }&{ co_config }={ co_value_special_esc }2|.
+    append ls_test to mt_tests.
+
+    " PARAM: special character; CONFIG: special character
+    clear ls_test.
+    ls_test-value_param = co_value_special_esc.
+    ls_test-value_param_change = |{ co_value_special }2|.
+    ls_test-value_config = co_value_special_esc.
+    ls_test-url = |{ co_param }={ co_value_special_esc }{ l_client_string }&sap-language={ l_langu }&{ co_config }={ co_value_special_esc }|.
+    ls_test-url2 = |{ co_param }={ co_value_special_esc }&{ co_config }={ co_value_special_esc }{ l_client_string }&sap-language={ l_langu }|.
+    ls_test-url3 = |{ co_param }={ co_value_special_esc }2{ l_client_string }&sap-language={ l_langu }&{ co_config }={ co_value_special_esc }2|.
+    append ls_test to mt_tests.
+
+    " PARAM: empty; CONFIG: special character
+    clear ls_test.
+    ls_test-value_param = co_value_empty.
+    ls_test-value_param = co_value_empty. "special, to test fill_node with empty parameter-values
+    ls_test-value_config = co_value_special_esc.
+    ls_test-url = |{ co_param }={ co_value_empty }{ l_client_string }&sap-language={ l_langu }&{ co_config }={ co_value_special_esc }|.
+    ls_test-url2 = |{ co_param }={ co_value_empty }&{ co_config }={ co_value_special_esc }{ l_client_string }&sap-language={ l_langu }|.
+    ls_test-url3 = |{ co_param }={ ls_test-value_param_change }{ l_client_string }&sap-language={ l_langu }&{ co_config }={ co_value_special_esc }2|.
+    append ls_test to mt_tests.
+
+  endmethod.                    "class_constructor
+
+  method prgn_wdy_execute_url.
+    " call sequence simulates PRGN_WDY_EXECUTE_URL
+    data:
+      l_node_data type agr_url,
+      ls_test type s_test,
+      l_url type string,
+      l_url_param type string,
+      ls_param like line of i_param.
+
+    loop at mt_tests into ls_test.
+
+      "    SEwdr_chip_page?PARAM=X&WDCONFIGURATIONID=X
+      l_node_data = |SE{ co_application }?{ co_param }={ ls_test-value_param }&{ co_config }={ ls_test-value_config }|.
+
+      " simulates starting an application from NWBC or user menu
+      perform split_node using l_node_data space.
+
+      call function 'WDY_CONSTRUCT_URL'
+        exporting
+          protocol            = 'HTTPS'
+          internalmode        = ''
+          application         = co_application
+          parameters          = i_param
+        importing
+          out_url             = l_url
+        exceptions
+          invalid_application = 1.
+      assert sy-subrc = 0.
+
+      l_url_param = substring_after( val = l_url sub = '?' ).
+      if cl_aunit_assert=>assert_equals(
+          exp = ls_test-url
+          act = l_url_param
+          msg = |VALUE_PARAM={ ls_test-value_param }; VALUE_CONFIG={ ls_test-value_config }|
+          quit = if_aunit_constants=>no )
+        = abap_true.
+        assert 1 = 1. "just for breakpoint
+      endif.
+
+    endloop.
+  endmethod.       "prgn_Wdy_Execute_Url
+
+
+
+  method wdy_execute_in_browser.
+    "simulation of WDY_EXECUTE_IN_BROWSER
+    data:
+     lt_params type tihttpnvp,
+     ls_param like line of lt_params,
+      ls_test type s_test,
+      l_url type string,
+      l_url_param type string,
+      l_langu type c length 2.
+
+    loop at mt_tests into ls_test.
+      clear lt_params.
+      ls_param-name = co_param.
+      ls_param-value = cl_http_utility=>unescape_url( ls_test-value_param ).
+      append ls_param to lt_params.
+
+      ls_param-name = co_config.
+      ls_param-value = cl_http_utility=>unescape_url( ls_test-value_config ).
+      append ls_param to lt_params.
+
+      call function 'WDY_CONSTRUCT_URL'
+        exporting
+          protocol            = 'HTTPS'
+          internalmode        = abap_false
+          application         = co_application
+          parameters          = lt_params
+        importing
+          out_url             = l_url
+        exceptions
+          invalid_application = 1.
+      assert sy-subrc = 0.
+
+      l_url_param = substring_after( val = l_url sub = '?' ).
+      if cl_aunit_assert=>assert_equals(
+          exp = ls_test-url2
+          act = l_url_param
+          msg = |VALUE_PARAM={ ls_test-value_param }; VALUE_CONFIG={ ls_test-value_config }|
+          quit = if_aunit_constants=>no )
+        = abap_true.
+        assert 1 = 1. "just for breakpoint
+      endif.
+    endloop.
+  endmethod.       "wdy_Execute_In_Browser
+
+  method simulate_change.
+    " method simulates changing a wd configuration value and a param value like in PRGN_WDY_CHANGE_NODE
+    data:
+     lt_params type tihttpnvp,
+     ls_param like line of lt_params,
+      ls_test type s_test,
+      l_url type agr_url,
+      l_url_param type string,
+      l_langu type c length 2,
+      l_text type c length 80.
+
+
+    field-symbols:
+      <ls_param> type param_lin.
+
+    loop at mt_tests into ls_test.
+
+      l_url = |SE{ co_application }?{ ls_test-url }|.
+      perform split_node using l_url l_text.
+
+      read table i_param assigning <ls_param> with key name = co_param.
+      assert sy-subrc = 0.
+      <ls_param>-value = ls_test-value_param_change.
+
+      wdy_config = |{ wdy_config }2|.
+
+      perform fill_node changing l_url l_text.
+
+      l_url_param = substring_after( val = l_url sub = '?' ).
+      if cl_aunit_assert=>assert_equals(
+          exp = ls_test-url3
+          act = l_url_param
+          msg = |VALUE_PARAM={ ls_test-value_param }; VALUE_CONFIG={ ls_test-value_config }|
+          quit = if_aunit_constants=>no )
+        = abap_true.
+        assert 1 = 1. "just for breakpoint
+      endif.
+    endloop.
+
+  endmethod.                    "simulate_change
+
+  method parse_agr_url.
+    data:
+      l_agr_url type agr_url,
+      ls_test type s_test,
+      lt_params type tihttpnvp,
+      l_config_id type string,
+      l_out_url type string.
+
+    loop at mt_tests into ls_test.
+      l_agr_url = ls_test-url.
+      call function 'WDY_PARSE_AGR_URL'
+        exporting
+          in_url         = l_agr_url
+        importing
+          out_param      = lt_params
+          out_config_id  = l_config_id
+          out_url        = l_out_url
+        exceptions
+          invalid_format = 1
+          others         = 2.
+      if cl_aunit_assert=>assert_equals(
+          exp = 0
+          act = sy-subrc
+          msg = |WDY_PARSE_AGR_URL -1-|
+          quit = if_aunit_constants=>no ) = abap_true.
+        assert 1 = 1.
+      endif.
+
+    endloop.
+  endmethod.                    "parse_agr_url
+
+
+  method fill_node.
+    data:
+      l_node_data type agr_url,
+      l_short_text type c length 80.
+    call function 'PRGN_WDY_FILL_NODE'
+      exporting
+        application = 'WDR_CHIP_PAGE'
+        config_id   = 'WDR_TEST_CHIP_PAGE_STANDARD'
+      changing
+        node_data   = l_node_data
+        short_text  = l_short_text.
+
+    if cl_aunit_assert=>assert_equals(
+        exp = '0Iwdr_chip_page?WDCONFIGURATIONID=WDR_TEST_CHIP_PAGE_STANDARD'
+        act = l_node_data
+        msg = |PRGN_WDY_FILL_NODE -1-|
+        quit = if_aunit_constants=>no ) = abap_true.
+      assert 1 = 1.
+    endif.
+
+    try.
+        data:
+          l_short_text_exp type wdy_md_description.
+        l_short_text_exp = cl_wdy_md_application=>get_object_by_key( 'WDR_CHIP_PAGE' )->if_wdy_md_object~get_description( ).
+        if cl_aunit_assert=>assert_equals(
+            exp = l_short_text_exp
+            act = l_short_text
+            msg = |PRGN_WDY_FILL_NODE -2-|
+            quit = if_aunit_constants=>no ) = abap_true.
+          assert 1 = 1.
+        endif.
+      catch cx_wdy_md_permission_failure cx_wdy_md_not_existing.
+        assert 1 = 1.
+    endtry.
+
+  endmethod.                    "fill_node
+
+  method wdy_parse_agr_url.
+    data l_url_in1 type agr_url value '0EUSMDCREQUEST_CREATE?SAP-LANGUAGE=DE&WDCONFIGURATIONID=USMD_CREQUEST_CREATE'.
+    data l_url_in2 type agr_url value '0EUSMDCREQUEST_CREATE?SAP-LANGUAGE=DE&SAP-WD-CONFIGID=USMD_CREQUEST_CREATE'.
+    data l_url_out type string.
+    data l_config_id type string.
+
+    call function 'WDY_PARSE_AGR_URL'
+      exporting
+        in_url         = l_url_in1
+      importing
+        out_config_id  = l_config_id
+        out_url        = l_url_out
+      exceptions
+        invalid_format = 1
+        others         = 2.
+    cl_aunit_assert=>assert_subrc(
+      exporting
+        act              = sy-subrc
+    ).
+
+    if cl_aunit_assert=>assert_equals(
+       exp = 'USMD_CREQUEST_CREATE'
+       act = l_config_id
+       msg = |expected= 'USMD_CREQUEST_CREATE' ; actual={ l_config_id }|
+       quit = if_aunit_constants=>no )
+     = abap_true.
+      assert 1 = 1. "just for breakpoint
+    endif.
+
+    call function 'WDY_PARSE_AGR_URL'
+      exporting
+        in_url         = l_url_in2
+      importing
+        out_config_id  = l_config_id
+        out_url        = l_url_out
+      exceptions
+        invalid_format = 1
+        others         = 2.
+    cl_aunit_assert=>assert_subrc(
+      exporting
+        act              = sy-subrc
+    ).
+
+    if cl_aunit_assert=>assert_equals(
+       exp = 'USMD_CREQUEST_CREATE'
+       act = l_config_id
+       msg = |expected= 'USMD_CREQUEST_CREATE' ; actual={ l_config_id }|
+       quit = if_aunit_constants=>no )
+     = abap_true.
+      assert 1 = 1. "just for breakpoint
+    endif.
+
+  endmethod.                    "WDY_PARSE_AGR_URL
+endclass.       "lcl_Unit_Tests_Url
